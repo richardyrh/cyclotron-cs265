@@ -1,5 +1,5 @@
 [package]
-name = "dpi-rs"
+name = "radpie"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,5 +10,5 @@ libc = "0.2.152"
 rand = "0.8.5"
 
 [lib]
-name = "dpi_rs"
+name = "radpie"
 crate-type = ["dylib"]
