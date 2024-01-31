@@ -21,7 +21,7 @@ struct State {
     finished: bool,
 }
 
-thread_local!(static STATE: RefCell<State> = RefCell::new(Default::default()));
+thread_local!(static STATE: RefCell<State> = RefCell::new(State::default()));
 
 struct Bundle {
     a_ready: bool,
@@ -60,12 +60,12 @@ pub fn memfuzz_generate_rs(
     ptr_a_ready: *const u8,
     ptr_a_valid: *mut u8,
     ptr_a_address: *mut u64,
-    ptr_a_is_store: *mut u8,
+    _ptr_a_is_store: *mut u8,
     ptr_a_size: *mut u32,
-    ptr_a_data: *mut u64,
+    _ptr_a_data: *mut u64,
     ptr_d_ready: *mut u8,
     ptr_d_valid: *const u8,
-    ptr_d_is_store: *mut u8,
+    _ptr_d_is_store: *mut u8,
     ptr_d_size: *mut u32,
     inflight: u8,
     ptr_finished: *mut u8,
@@ -97,7 +97,7 @@ pub fn memfuzz_generate_rs(
     STATE.with(|state| {
         let mut s = state.borrow_mut();
         // s.rng = rand::thread_rng();
-        if s.cycle >= 100000 {
+        if s.cycle >= 500000 {
             s.stop = true;
         }
         if s.stop && (inflight == 0) {
