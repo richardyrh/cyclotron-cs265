@@ -1,11 +1,8 @@
-#![feature(once_cell_get_mut)]
-
 use crate::sim::Sim;
 use std::sync::{OnceLock, RwLock};
 
 struct Config {
     num_lanes: usize,
-    wordsize: u64,
 }
 
 static CONFIG_CELL: OnceLock<Config> = OnceLock::new();
@@ -32,7 +29,6 @@ struct RespBundle {
 pub fn emulator_init_rs(num_lanes: i32) {
     CONFIG_CELL.get_or_init(|| Config {
         num_lanes: num_lanes as usize,
-        wordsize: 4,
     });
 
     let mut sim = CELL.write().unwrap();
@@ -81,7 +77,7 @@ pub fn emulator_generate_rs(
     let mut resp_bundles = Vec::with_capacity(1);
     for i in 0..1 {
         resp_bundles.push(RespBundle {
-            ready: (vec_a_ready[i] != 0),
+            ready: (vec_d_ready[i] != 0), // bogus; we need to set this
             valid: (vec_d_valid[i] != 0),
             size: vec_d_size[i],
         });
@@ -89,13 +85,11 @@ pub fn emulator_generate_rs(
 
     push_imem_resp(sim, &resp_bundles[0]);
 
-    // FIXME: check a_ready from mem side
-
     let mut req_bundles = Vec::with_capacity(1);
-    match generate_imem_req(sim) {
+    match generate_imem_req(sim, vec_a_ready[0] == 1) {
         Some(bundle) => {
             req_bundles.push(bundle);
-        },
+        }
         None => {}
     }
 
@@ -115,17 +109,22 @@ fn push_imem_resp(sim: &mut Sim, resp: &RespBundle) {
     sim.push_imem_resp(resp.size as u64 /*bogus*/);
 }
 
-fn generate_imem_req(sim: &mut Sim) -> Option<ReqBundle> {
-    let front = sim.pop_imem_resp();
-    match front {
+fn generate_imem_req(sim: &mut Sim, ready: bool) -> Option<ReqBundle> {
+    let front = sim.peek_imem_req();
+    let req = match front {
         Some(data) => Some(ReqBundle {
             valid: true,
             address: data,
-            size: 4, // bogus
+            size: 2, // bogus
             ready: true,
         }),
         None => None,
+    };
+    if ready {
+        println!("req fire!!!");
+        sim.pop_imem_req();
     }
+    req
 }
 
 // unwrap arrays-of-structs to structs-of-arrays
