@@ -106,11 +106,11 @@ fn push_imem_resp(sim: &mut Sim, resp: &RespBundle) {
     if !resp.valid {
         return;
     }
-    sim.push_imem_resp(resp.size as u64 /*bogus*/);
+    sim.imem_resp.put(resp.size as u64 /*bogus*/);
 }
 
 fn generate_imem_req(sim: &mut Sim, ready: bool) -> Option<ReqBundle> {
-    let front = sim.peek_imem_req();
+    let front = sim.imem_req.get();
     let req = match front {
         Some(data) => Some(ReqBundle {
             valid: true,
@@ -120,10 +120,7 @@ fn generate_imem_req(sim: &mut Sim, ready: bool) -> Option<ReqBundle> {
         }),
         None => None,
     };
-    if ready {
-        println!("req fire!!!");
-        sim.pop_imem_req();
-    }
+    assert!(ready, "only ready supported");
     req
 }
 
