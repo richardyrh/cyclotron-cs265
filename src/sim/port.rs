@@ -1,5 +1,3 @@
-use std::collections::VecDeque;
-
 // An input port to the simulator
 pub struct InputPort {
     valid: bool,
@@ -26,7 +24,7 @@ impl InputPort {
         return true;
     }
 
-    fn get(&mut self) -> Option<u64> {
+    pub (super) fn get(&mut self) -> Option<u64> {
         // mark empty
         self.ready = true;
         match self.valid {
@@ -52,7 +50,7 @@ impl OutputPort {
     }
 
     // returns true if port was ready and put succeeded.
-    fn put(&mut self, data: u64) -> bool {
+    pub (super) fn put(&mut self, data: u64) -> bool {
         if !self.ready {
             return false;
         }
@@ -68,41 +66,5 @@ impl OutputPort {
             true => Some(self.data),
             false => None
         }
-    }
-}
-
-pub struct Sim {
-    cycle: u64,
-    counter: u64,
-    pub imem_req: OutputPort,
-    pub imem_resp: InputPort,
-}
-
-impl Sim {
-    pub fn new() -> Sim {
-        Sim {
-            cycle: 0,
-            counter: 0,
-            imem_req: OutputPort::new(),
-            imem_resp: InputPort::new(),
-        }
-    }
-
-    pub fn tick(&mut self) {
-        println!("tick! cycle={}", self.cycle);
-
-        if self.imem_req.put(self.counter) {
-            self.counter += 4;
-        }
-
-        // bogus logic that process responses
-        match self.imem_resp.get() {
-            Some(d) => {
-                println!("rust: received response: data={}", d);
-            }
-            None => {}
-        }
-
-        self.cycle += 1;
     }
 }
