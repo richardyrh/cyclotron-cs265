@@ -106,7 +106,7 @@ fn push_imem_resp(sim: &mut Sim, resp: &RespBundle) {
     if !resp.valid {
         return;
     }
-    sim.imem_resp.put(resp.size as u64 /*bogus*/);
+    sim.imem_resp.put(resp.size as u64 /*bogus*/, sim.time() + 1);
 }
 
 fn generate_imem_req(sim: &mut Sim, ready: bool) -> Option<ReqBundle> {
