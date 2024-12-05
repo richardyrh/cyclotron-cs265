@@ -1,5 +1,5 @@
 [package]
-name = "radpie"
+name = "cyclotron"
 version = "0.1.0"
 edition = "2021"
 
@@ -11,5 +11,5 @@ rand = "0.8.5"
 # sv-parser = "0.13.3"
 
 [lib]
-name = "radpie"
+name = "cyclotron"
 crate-type = ["dylib"]
