@@ -1,4 +1,4 @@
-use crate::sim::Sim;
+use crate::{muon::core_cytron::*, base::behavior::*};
 use std::sync::{OnceLock, RwLock};
 
 struct Config {
@@ -10,7 +10,7 @@ static CONFIG_CELL: OnceLock<Config> = OnceLock::new();
 // A single-writer, multiple-reader mutex lock on the global singleton of Sim.
 // A singleton is necessary because it's the only way to maintain context across independent DPI
 // calls.  Could use RefCell instead, but RwLock covers the case where RTL is multi-threaded.
-static CELL: RwLock<Option<Sim>> = RwLock::new(None);
+static CELL: RwLock<Option<MuonCoreCytron>> = RwLock::new(None);
 
 struct ReqBundle {
     ready: bool,
@@ -32,10 +32,10 @@ pub fn emulator_init_rs(num_lanes: i32) {
     });
 
     let mut sim = CELL.write().unwrap();
-    if !sim.as_ref().is_none() {
+    if sim.as_ref().is_some() {
         panic!("sim cell already initialized!");
     }
-    *sim = Some(Sim::new());
+    *sim = Some(MuonCoreCytron::new());
 }
 
 #[no_mangle]
@@ -71,7 +71,7 @@ pub fn emulator_tick_rs(
 
     push_imem_resp(sim, &resp_bundles[0]);
 
-    sim.tick();
+    sim.tick_one();
 }
 
 #[no_mangle]
@@ -120,24 +120,21 @@ pub fn emulator_generate_rs(
     );
 }
 
-fn push_imem_resp(sim: &mut Sim, resp: &RespBundle) {
+fn push_imem_resp(sim: &mut MuonCoreCytron, resp: &RespBundle) {
     if !resp.valid {
         return;
     }
-    sim.imem_resp.put(resp.size as u64 /*bogus*/, sim.time() + 1);
+    sim.imem_resp.put(resp.size as u64);
 }
 
-fn generate_imem_req(sim: &mut Sim, ready: bool) -> Option<ReqBundle> {
+fn generate_imem_req(sim: &mut MuonCoreCytron, ready: bool) -> Option<ReqBundle> {
     let front = sim.imem_req.get();
-    let req = match front {
-        Some(data) => Some(ReqBundle {
+    let req = front.map(|data| ReqBundle {
             valid: true,
-            address: data,
+            address: *data,
             size: 2, // bogus
             ready: true,
-        }),
-        None => None,
-    };
+        });
     assert!(ready, "only ready supported");
     req
 }
