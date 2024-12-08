@@ -9,8 +9,9 @@ edition = "2021"
 libc = "0.2.152"
 rand = "0.8.5"
 goblin = "0.5"
+log = "0.4.22"
 # sv-parser = "0.13.3"
 
 [lib]
 name = "cyclotron"
-crate-type = ["dylib"]
+crate-type = ["rlib", "dylib"]

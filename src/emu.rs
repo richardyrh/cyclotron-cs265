@@ -1,5 +1,6 @@
 use crate::{muon::core_cytron::*, base::behavior::*};
 use std::sync::{OnceLock, RwLock};
+use crate::base::mem::*;
 
 struct Config {
     num_lanes: usize,
@@ -124,15 +125,18 @@ fn push_imem_resp(sim: &mut MuonCoreCytron, resp: &RespBundle) {
     if !resp.valid {
         return;
     }
-    sim.imem_resp.put(resp.size as u64);
+    sim.imem_resp.put(MemResponse {
+        op: MemRespOp::Ack,
+        data: None, // seems a bit bogus
+    });
 }
 
 fn generate_imem_req(sim: &mut MuonCoreCytron, ready: bool) -> Option<ReqBundle> {
     let front = sim.imem_req.get();
     let req = front.map(|data| ReqBundle {
             valid: true,
-            address: *data,
-            size: 2, // bogus
+            address: data.address as u64,
+            size: data.size as u32,
             ready: true,
         });
     assert!(ready, "only ready supported");
