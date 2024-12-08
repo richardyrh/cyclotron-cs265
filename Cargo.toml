@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 libc = "0.2.152"
 rand = "0.8.5"
+goblin = "0.5"
 # sv-parser = "0.13.3"
 
 [lib]

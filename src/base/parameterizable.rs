@@ -1,5 +1,5 @@
-pub trait Parameterizable<T> {
+pub trait Parameterizable<T: TryFrom<String>> {
     type Error;
-    fn get_prefix() -> String;
-    fn configure(&mut self, config: T) -> Result<(), Self::Error>;
+    fn get_prefixes() -> Vec<String>;
+    fn configure(&mut self, prefix: &str, config: T) -> Result<(), Self::Error>;
 }
