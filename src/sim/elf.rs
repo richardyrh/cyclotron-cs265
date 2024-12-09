@@ -50,7 +50,7 @@ impl Resets for ElfBackedMem {}
 impl HasState for ElfBackedMem {}
 
 impl HasMemory for ElfBackedMem {
-    fn read<const N: usize>(&self, addr: usize) -> Option<Arc<[u8; N]>> {
+    fn read<const N: usize>(&mut self, addr: usize) -> Option<Arc<[u8; N]>> {
         self.base.state.sections.iter().fold(None, |prev, (range, data)| {
             prev.or(((addr >= range.0) && (addr + N <= range.1)).then(|| {
                 Arc::new(data[(addr - range.0)..(addr - range.0 + N)].try_into().unwrap())
@@ -58,13 +58,13 @@ impl HasMemory for ElfBackedMem {
         })
     }
 
-    fn write<const N: usize>(&self, _addr: usize, _data: Arc<[u8; N]>) -> Result<(), String> {
+    fn write<const N: usize>(&mut self, _addr: usize, _data: Arc<[u8; N]>) -> Result<(), String> {
         Err("elf backed memory cannot be written to".to_string())
     }
 }
 
 impl ElfBackedMem {
-    pub fn read_inst(&self, addr: usize) -> Option<u64> {
+    pub fn read_inst(&mut self, addr: usize) -> Option<u64> {
         let slice = self.read::<8>(addr)?;
         u64::from_le_bytes(*slice).into()
     }

@@ -3,7 +3,7 @@
 // enqueueing entries N cycles in advance
 use std::{mem::{self, MaybeUninit}, ptr::copy_nonoverlapping, slice};
 
-pub trait HasState: Sized + Default {
+pub trait HasState: Sized {
     fn set_state(&mut self, state: Self) {
         *self = state
     }
@@ -38,6 +38,3 @@ pub trait HasState: Sized + Default {
         }
     }
 }
-
-#[derive(Default)]
-pub struct NullState {}

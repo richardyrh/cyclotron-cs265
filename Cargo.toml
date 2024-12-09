@@ -10,6 +10,9 @@ libc = "0.2.152"
 rand = "0.8.5"
 goblin = "0.5"
 log = "0.4.22"
+num = "0.4.3"
+num-derive = "0.4.2"
+num-traits = "0.2"
 # sv-parser = "0.13.3"
 
 [lib]

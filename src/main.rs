@@ -10,7 +10,7 @@ pub fn main() -> Result<(), Box<dyn Error>> {
     cytron_top.configure("sim.timeout", "1000")?;
 
     cytron_top.muon.reset();
-    for c in 0..cytron_top.timeout {
+    for _ in 0..cytron_top.timeout {
         cytron_top.tick_one()
     }
     Ok(())

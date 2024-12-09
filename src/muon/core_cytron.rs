@@ -1,14 +1,19 @@
 use crate::base::{behavior::*, component::*, port::*, state::HasState};
 use crate::base::mem::{MemRequest, MemResponse};
+use crate::muon::decode::*;
+use crate::muon::execute::*;
 
 #[derive(Default)]
 pub struct MuonState {
-    pc: u64,
+    pc: u32,
 }
 
-#[derive(Default)]
 pub struct MuonCoreCytron {
     pub base: ComponentBase<MuonState>,
+    pub reg_file: RegFile,
+    pub decode_unit: DecodeUnit,
+    pub execute_unit: ExecuteUnit,
+
     pub imem_req: Port<OutputPort, MemRequest>,
     pub imem_resp: Port<InputPort, MemResponse>,
 }
@@ -16,6 +21,8 @@ pub struct MuonCoreCytron {
 impl Resets for MuonCoreCytron {
     fn reset(&mut self) {
         self.base.state.pc = 0x80000000;
+        self.reg_file.reset();
+        self.execute_unit.reset();
     }
 }
 impl HasState for MuonCoreCytron {} // default impl is ok
@@ -31,8 +38,11 @@ impl Ticks for MuonCoreCytron {
     fn tick_one(&mut self) {
         println!("tick! cycle={}", self.base.cycle);
 
-        self.decode();
         self.fetch();
+        if let Some(decoded) = self.decode() {
+            let writeback = self.execute(decoded);
+            self.writeback(writeback);
+        }
 
         self.base.cycle += 1;
     }
@@ -48,6 +58,9 @@ impl MuonCoreCytron {
     pub fn new() -> MuonCoreCytron {
         MuonCoreCytron {
             base: ComponentBase::default(),
+            reg_file: RegFile::default(),
+            decode_unit: DecodeUnit,
+            execute_unit: ExecuteUnit::default(),
             imem_req: Port::new(),
             imem_resp: Port::new()
         }
@@ -64,12 +77,22 @@ impl MuonCoreCytron {
         self.base.state.pc += 8;
     }
 
-    fn decode(&mut self) {
-        if let Some(resp) = self.imem_resp.get() {
-            let data = resp.data.as_ref().unwrap();
-            let hex_string: String = data.iter().map(|byte| format!("{:02X}", byte)).collect::<Vec<_>>().join(" ");
+    fn decode(&mut self) -> Option<DecodedInst> {
+        self.imem_resp.get().map(|resp| {
+            let inst_data: [u8; 8] = (*(resp.data.as_ref().unwrap().clone()))
+                .try_into().expect("imem response is not 8 bytes");
+            self.decode_unit.decode(inst_data, self.base.state.pc, &self.reg_file)
+        })
+    }
 
-            println!("decode: got data={}", hex_string);
+    fn execute(&mut self, decoded_inst: DecodedInst) -> Writeback {
+        self.execute_unit.execute(decoded_inst)
+    }
+
+    fn writeback(&mut self, writeback: Writeback) {
+        self.reg_file.write_gpr(writeback.rd_addr, writeback.rd_data);
+        if let Some(pc) = writeback.set_pc {
+            self.base.state.pc = pc;
         }
     }
 }

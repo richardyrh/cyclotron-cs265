@@ -12,10 +12,6 @@ impl<T: Default> Default for ComponentBase<T> {
     }
 }
 
-pub trait IsComponent<T: Default>: Default + Ticks + Stalls + Resets + HasState {
+pub trait IsComponent<T>: Ticks + Stalls + Resets + HasState {
     fn get_base(&mut self) -> &mut ComponentBase<T>;
-
-    fn reset(&mut self) {
-        self.get_base().state = T::default()
-    }
 }

@@ -2,9 +2,9 @@ use std::sync::Arc;
 use crate::base::port::*;
 
 pub trait HasMemory {
-    fn read<const N: usize>(&self, addr: usize) -> Option<Arc<[u8; N]>>;
+    fn read<const N: usize>(&mut self, addr: usize) -> Option<Arc<[u8; N]>>;
 
-    fn write<const N: usize>(&self, addr: usize, data: Arc<[u8; N]>) -> Result<(), String>;
+    fn write<const N: usize>(&mut self, addr: usize, data: Arc<[u8; N]>) -> Result<(), String>;
 }
 
 #[derive(Default)]
