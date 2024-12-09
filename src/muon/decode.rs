@@ -18,11 +18,12 @@ pub struct DecodedInst {
     pub imm32: i32,
     pub imm24: i32,
     pub pc: u32,
+    pub hex_string: String
 }
 
 impl std::fmt::Display for DecodedInst {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "inst [ op: {:x}, f3: {}, f7: {} ]", self.opcode, self.f3, self.f7)
+        write!(f, "inst 0x{} [ op: 0x{:x}, f3: {}, f7: {} ]", self.hex_string, self.opcode, self.f3, self.f7)
     }
 }
 
@@ -93,7 +94,7 @@ pub struct DecodeUnit;
 impl DecodeUnit {
     pub fn decode(&self, inst_data: [u8; 8], pc: u32, rf: &RegFile) -> DecodedInst {
         let inst = u64::from_le_bytes(inst_data);
-        let _hex_string: String = inst_data.iter().map(|byte| format!("{:02X}", byte)).collect::<Vec<_>>().join(" ");
+        let hex_string: String = inst_data.iter().map(|byte| format!("{:02X}", byte)).collect::<Vec<_>>().join("");
 
         let _pred: u8 = inst.sel(63, 60) as u8;
         let rs1_addr: u8 = inst.sel(27, 20) as u8;
@@ -118,7 +119,8 @@ impl DecodeUnit {
             f7: inst.sel(58, 52) as u8,
             imm32: uimm32 as i32,
             imm24,
-            pc
+            pc,
+            hex_string
         }
     }
 }

@@ -1,4 +1,5 @@
 use num_derive::FromPrimitive;
+use num_traits::WrappingAdd;
 use crate::muon::decode::DecodedInst;
 
 #[derive(FromPrimitive, Clone)]
@@ -132,9 +133,10 @@ impl InstGroup {
 // TODO: make this all constant
 pub struct ISA;
 impl ISA {
+
     pub fn get_insts() -> Vec<Box<InstGroup>> {
         let r3_inst_imps: Vec<InstImp<2>> = vec![
-            InstImp::bin_f3_f7("add",  Opcode::ADD, 0,  0, InstAction::WRITE_REG, |a, b| { a + b }),
+            InstImp::bin_f3_f7("add",  Opcode::ADD, 0,  0, InstAction::WRITE_REG, |a, b| { a.wrapping_add(b) }),
             InstImp::bin_f3_f7("sub",  Opcode::ADD, 0, 32, InstAction::WRITE_REG, |a, b| { ((a as i32) - (b as i32)) as u32 }),
             InstImp::bin_f3_f7("sll",  Opcode::ADD, 1,  0, InstAction::WRITE_REG, |a, b| { a << (b & 31) }),
             InstImp::bin_f3_f7("slt",  Opcode::ADD, 2,  0, InstAction::WRITE_REG, |a, b| { if (a as i32) < (b as i32) { 1 } else { 0 } }),
@@ -151,17 +153,17 @@ impl ISA {
         };
 
         let i2_inst_imps: Vec<InstImp<2>> = vec![
-            InstImp::bin_f3("lb",  Opcode::LOAD, 0, InstAction::MEM_LOAD, |a, b| { a + b }),
-            InstImp::bin_f3("lh",  Opcode::LOAD, 1, InstAction::MEM_LOAD, |a, b| { a + b }),
-            InstImp::bin_f3("lw",  Opcode::LOAD, 2, InstAction::MEM_LOAD, |a, b| { a + b }),
-            /* InstImp::bin_f3("ld",  Opcode::LOAD, 3, InstAction::MEM_LOAD, |a, b| { a + b }), */
-            InstImp::bin_f3("lbu", Opcode::LOAD, 4, InstAction::MEM_LOAD, |a, b| { a + b }),
-            InstImp::bin_f3("lhu", Opcode::LOAD, 5, InstAction::MEM_LOAD, |a, b| { a + b }),
-            InstImp::bin_f3("lwu", Opcode::LOAD, 6, InstAction::MEM_LOAD, |a, b| { a + b }),
+            InstImp::bin_f3("lb",  Opcode::LOAD, 0, InstAction::MEM_LOAD, |a, b| { a.wrapping_add(b) }),
+            InstImp::bin_f3("lh",  Opcode::LOAD, 1, InstAction::MEM_LOAD, |a, b| { a.wrapping_add(b) }),
+            InstImp::bin_f3("lw",  Opcode::LOAD, 2, InstAction::MEM_LOAD, |a, b| { a.wrapping_add(b) }),
+            InstImp::bin_f3("ld",  Opcode::LOAD, 3, InstAction::MEM_LOAD, |a, b| { a.wrapping_add(b) }),
+            InstImp::bin_f3("lbu", Opcode::LOAD, 4, InstAction::MEM_LOAD, |a, b| { a.wrapping_add(b) }),
+            InstImp::bin_f3("lhu", Opcode::LOAD, 5, InstAction::MEM_LOAD, |a, b| { a.wrapping_add(b) }),
+            InstImp::bin_f3("lwu", Opcode::LOAD, 6, InstAction::MEM_LOAD, |a, b| { a.wrapping_add(b) }),
 
             InstImp::bin_f3("fence", Opcode::FENCE, 0, InstAction::FENCE, |a, b| { todo!() }),
 
-            InstImp::bin_f3("addi",    Opcode::ADDI, 0,     InstAction::WRITE_REG, |a, b| { a + b }),
+            InstImp::bin_f3("addi",    Opcode::ADDI, 0,     InstAction::WRITE_REG, |a, b| { a.wrapping_add(b) }),
             InstImp::bin_f3_f7("slli", Opcode::ADDI, 1,  0, InstAction::WRITE_REG, |a, b| { a << (b & 31) }),
             InstImp::bin_f3("slti",    Opcode::ADDI, 2,     InstAction::WRITE_REG, |a, b| { if (a as i32) < (b as i32) { 1 } else { 0 } }),
             InstImp::bin_f3("sltiu",   Opcode::ADDI, 3,     InstAction::WRITE_REG, |a, b| { if a < b { 1 } else { 0 } }),
@@ -171,7 +173,7 @@ impl ISA {
             InstImp::bin_f3("ori",     Opcode::ADDI, 6,     InstAction::WRITE_REG, |a, b| { a | b }),
             InstImp::bin_f3("andi",    Opcode::ADDI, 7,     InstAction::WRITE_REG, |a, b| { a & b }),
 
-            InstImp::bin_f3("jalr", Opcode::JALR, 0, InstAction::SET_PC | InstAction::LINK, |a, b| { a + b }),
+            InstImp::bin_f3("jalr", Opcode::JALR, 0, InstAction::SET_PC | InstAction::LINK, |a, b| { a.wrapping_add(b) }),
         ];
         let i2_insts = InstGroupVariant {
             insts: i2_inst_imps,
@@ -180,9 +182,9 @@ impl ISA {
 
         // does not return anything
         let s_inst_imps: Vec<InstImp<2>> = vec![
-            InstImp::bin_f3("sb", Opcode::STORE, 0, InstAction::MEM_STORE, |a, imm| { a + imm }),
-            InstImp::bin_f3("sh", Opcode::STORE, 1, InstAction::MEM_STORE, |a, imm| { a + imm }),
-            InstImp::bin_f3("sw", Opcode::STORE, 2, InstAction::MEM_STORE, |a, imm| { a + imm }),
+            InstImp::bin_f3("sb", Opcode::STORE, 0, InstAction::MEM_STORE, |a, imm| { a.wrapping_add(imm) }),
+            InstImp::bin_f3("sh", Opcode::STORE, 1, InstAction::MEM_STORE, |a, imm| { a.wrapping_add(imm) }),
+            InstImp::bin_f3("sw", Opcode::STORE, 2, InstAction::MEM_STORE, |a, imm| { a.wrapping_add(imm) }),
             /* InstImp::bin_f3("sd", Opcode::STORE, 3, InstAction::MEM_STORE, |a, imm| { a + imm }), */
         ];
         let s_insts = InstGroupVariant {
@@ -205,27 +207,24 @@ impl ISA {
         };
 
         let pcrel_inst_imps: Vec<InstImp<2>> = vec![
-            InstImp::bin("auipc", Opcode::AUIPC, InstAction::WRITE_REG, |a, b| { a + b }),
-            InstImp::bin("jal", Opcode::JAL, InstAction::SET_PC | InstAction::LINK, |a, b| { a + b }),
+            InstImp::bin("auipc", Opcode::AUIPC, InstAction::WRITE_REG, |a, b| { a.wrapping_add(b) }),
+            InstImp::bin("jal", Opcode::JAL, InstAction::SET_PC | InstAction::LINK, |a, b| { a.wrapping_add(b) }),
         ];
         let pcrel_insts = InstGroupVariant {
             insts: pcrel_inst_imps,
             get_operands: |req| [req.pc, req.imm32 as u32],
         };
 
-        // let lui_inst_imp: Vec<InstImp<1>> = vec![
-        //     InstImp::una("lui", Opcode::LUI, InstAction::WRITE_REG, |a| { a }),
-        // ];
-        // let lui_inst = InstOpcode {
-        //     insts: lui_inst_imp,
-        //     get_operands: |req| [req.imm32 as u32],
-        // };
-
-        // let all_una_insts = vec![
-        //     Box::new(lui_inst),
-        // ];
+        let lui_inst_imp: Vec<InstImp<1>> = vec![
+            InstImp::una("lui", Opcode::LUI, InstAction::WRITE_REG, |a| { a }),
+        ];
+        let lui_inst = InstGroupVariant {
+            insts: lui_inst_imp,
+            get_operands: |req| [req.imm32 as u32],
+        };
 
         vec![
+            Box::new(InstGroup::Unary(lui_inst)),
             Box::new(InstGroup::Binary(r3_insts)),
             Box::new(InstGroup::Binary(i2_insts)),
             Box::new(InstGroup::Binary(s_insts)),
