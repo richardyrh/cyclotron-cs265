@@ -3,7 +3,7 @@
 // enqueueing entries N cycles in advance
 
 use std::marker::PhantomData;
-use log::info;
+use log::debug;
 
 #[derive(Default)]
 pub struct InputPort {}
@@ -31,7 +31,7 @@ impl<D, T: Default> Port<D, T> {
 
     // returns true if port was ready and put succeeded.
     pub fn put(&mut self, data: T/*, time: u64*/) -> bool {
-        info!("putting on port with valid {}", self.valid);
+        debug!("putting on port with valid {}", self.valid);
         if self.valid {
             return false;
         }
@@ -42,7 +42,7 @@ impl<D, T: Default> Port<D, T> {
     }
 
     pub fn get(&mut self) -> Option<&T> {
-        info!("getting from port with valid {}", self.valid);
+        debug!("getting from port with valid {}", self.valid);
         if self.valid {
             self.valid = false;
             Some(&self.data)

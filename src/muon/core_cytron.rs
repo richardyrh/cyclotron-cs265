@@ -36,10 +36,9 @@ impl IsComponent<MuonState> for MuonCoreCytron {
 
 impl Ticks for MuonCoreCytron {
     fn tick_one(&mut self) {
-        println!("tick! cycle={}", self.base.cycle);
-
         self.fetch();
         if let Some(decoded) = self.decode() {
+            println!("cycle={}, pc={:08x}", self.base.cycle, self.base.state.pc);
             let writeback = self.execute(decoded);
             self.writeback(writeback);
         }
@@ -92,6 +91,9 @@ impl MuonCoreCytron {
     fn writeback(&mut self, writeback: Writeback) {
         self.reg_file.write_gpr(writeback.rd_addr, writeback.rd_data);
         if let Some(pc) = writeback.set_pc {
+            if pc == 0 {
+                println!("simulation has probably finished, main has returned");
+            }
             self.base.state.pc = pc;
         }
     }

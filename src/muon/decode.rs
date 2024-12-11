@@ -62,6 +62,7 @@ impl Resets for RegFile {
     fn reset(&mut self) {
         self.base.state.gpr.fill(0u32);
         self.base.state.fpr.fill(0f32);
+        self.base.state.gpr[2] = 0xffff0000u32; // sp
     }
 }
 impl HasState for RegFile {}
@@ -94,7 +95,7 @@ pub struct DecodeUnit;
 impl DecodeUnit {
     pub fn decode(&self, inst_data: [u8; 8], pc: u32, rf: &RegFile) -> DecodedInst {
         let inst = u64::from_le_bytes(inst_data);
-        let hex_string: String = inst_data.iter().map(|byte| format!("{:02X}", byte)).collect::<Vec<_>>().join("");
+        let hex_string: String = inst_data.iter().rev().map(|byte| format!("{:02X}", byte)).collect::<Vec<_>>().join("");
 
         let _pred: u8 = inst.sel(63, 60) as u8;
         let rs1_addr: u8 = inst.sel(27, 20) as u8;

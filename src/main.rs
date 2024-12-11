@@ -3,6 +3,10 @@ use cyclotron::base::behavior::*;
 use cyclotron::sim::top::CyclotronTop;
 
 pub fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::init();
+
+    log::info!("hello world");
+
     let mut cytron_top = CyclotronTop::new();
 
     // TODO: read a yaml and parse

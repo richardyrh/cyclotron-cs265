@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use log::{debug, info};
 use crate::base::behavior::{Resets, Stalls, Ticks};
 use crate::base::component::{ComponentBase, IsComponent};
 use crate::base::mem::HasMemory;
@@ -75,6 +76,7 @@ impl IsComponent<ExecuteUnitState> for ExecuteUnit {
 impl ExecuteUnit {
     pub fn execute(&mut self, decoded: DecodedInst) -> Writeback {
         let isa = ISA::get_insts();
+        info!("executing decoded instruction {}", decoded);
         let (alu_result, actions) = isa.iter().map(|inst_group| {
             inst_group.execute(&decoded)
         }).fold(None, |prev, curr| {
@@ -99,7 +101,10 @@ impl ExecuteUnit {
         if (actions & InstAction::MEM_STORE) > 0 {
             self.base.state.dmem.write::<4>(alu_result as usize, Arc::new(decoded.rs2.to_le_bytes())).unwrap();
         }
-        if (actions & InstAction::SET_PC) > 0 {
+        if (actions & InstAction::SET_REL_PC) > 0 {
+            writeback.set_pc = (alu_result != 0).then(|| decoded.pc + alu_result);
+        }
+        if (actions & InstAction::SET_ABS_PC) > 0 {
             writeback.set_pc = Some(alu_result);
         }
         if (actions & InstAction::LINK) > 0 {
