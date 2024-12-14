@@ -2,9 +2,10 @@ use std::{collections::HashMap, fs, path::Path};
 use std::sync::Arc;
 use goblin::elf::Elf;
 use crate::base::behavior::*;
-use crate::base::component::{ComponentBase, IsComponent};
+use crate::base::component::{base_boilerplate, ComponentBase, IsComponent};
 use crate::base::state::HasState;
 use crate::base::mem::HasMemory;
+use crate::sim::top::CyclotronTop;
 
 #[derive(Default)]
 pub struct ElfBackedMemState {
@@ -13,32 +14,12 @@ pub struct ElfBackedMemState {
 
 #[derive(Default)]
 pub struct ElfBackedMem {
-    pub base: ComponentBase<ElfBackedMemState>,
+    pub base: ComponentBase<ElfBackedMemState, (), CyclotronTop>,
 }
 
-impl Parameterizable for ElfBackedMem {
-    fn get_children(&mut self) -> Vec<Box<&mut dyn Parameterizable>> {
-        vec![]
-    }
 
-    fn get_self_prefixes(&self) -> Vec<String> {
-        vec!["sim.muon.kernel_path".to_string()]
-    }
-
-    fn configure_self(&mut self, prefix: &str, config: &str) -> Result<(), String> {
-        match prefix {
-            "sim.muon.kernel_path" => {
-                self.load_path(Path::new(&config))
-            },
-            _ => Err(format!("unknown configuration item {}", config)),
-        }
-    }
-}
-
-impl IsComponent<ElfBackedMemState> for ElfBackedMem {
-    fn get_base(&mut self) -> &mut ComponentBase<ElfBackedMemState> {
-        &mut self.base
-    }
+impl IsComponent<ElfBackedMemState, (), CyclotronTop> for ElfBackedMem {
+    base_boilerplate!(ElfBackedMemState, (), CyclotronTop);
 }
 
 impl Ticks for ElfBackedMem {

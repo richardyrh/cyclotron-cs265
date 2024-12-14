@@ -51,3 +51,15 @@ impl<D, T: Default> Port<D, T> {
         }
     }
 }
+
+impl<OutputPort, T: Default> Port<OutputPort, T> {
+    pub fn blocked(&self) -> bool {
+        self.valid
+    }
+}
+
+impl<InputPort, T: Default> Port<InputPort, T> {
+    pub fn peek(&self) -> Option<&T> {
+        self.valid.then(|| &self.data)
+    }
+}

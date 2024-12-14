@@ -1,36 +1,44 @@
 use crate::base::{behavior::*, component::*, port::*, state::HasState};
 use crate::base::mem::{MemRequest, MemResponse};
+use crate::muon::config::MuonConfig;
 use crate::muon::decode::*;
 use crate::muon::execute::*;
+use crate::muon::scheduler::Scheduler;
+use crate::muon::warp::Warp;
 
 #[derive(Default)]
 pub struct MuonState {
-    pc: u32,
+    pub(crate) core_id: usize
 }
 
 pub struct MuonCoreCytron {
-    pub base: ComponentBase<MuonState>,
-    pub reg_file: RegFile,
-    pub decode_unit: DecodeUnit,
-    pub execute_unit: ExecuteUnit,
-
+    pub base: ComponentBase<MuonState, MuonConfig, ()>,
+    pub scheduler: Scheduler,
+    pub warps: Vec<Warp>,
     pub imem_req: Port<OutputPort, MemRequest>,
     pub imem_resp: Port<InputPort, MemResponse>,
 }
 
 impl Resets for MuonCoreCytron {
     fn reset(&mut self) {
-        self.base.state.pc = 0x80000000;
-        self.reg_file.reset();
-        self.execute_unit.reset();
+        self.scheduler.reset();
+        self.warps.iter_mut().for_each(|w| w.reset());
     }
 }
 impl HasState for MuonCoreCytron {} // default impl is ok
 impl Stalls for MuonCoreCytron {} // default impl is ok (for now)
 
-impl IsComponent<MuonState> for MuonCoreCytron {
-    fn get_base(&mut self) -> &mut ComponentBase<MuonState> {
-        &mut self.base
+impl IsComponent<MuonState, MuonConfig, ()> for MuonCoreCytron {
+    base_boilerplate!(MuonState, MuonConfig, ());
+}
+
+impl Parameterizable<MuonConfig> for MuonCoreCytron {
+    fn conf(&self) -> &MuonConfig {
+        self.base_ref().config.c.get_or_init(|| MuonConfig::default())
+    }
+
+    fn init_conf(&mut self, c: MuonConfig) {
+        self.base().config.c.set(c).unwrap()
     }
 }
 
@@ -47,21 +55,14 @@ impl Ticks for MuonCoreCytron {
     }
 }
 
-impl Parameterizable for MuonCoreCytron {
-    fn get_children(&mut self) -> Vec<Box<&mut dyn Parameterizable>> {
-        std::vec![]
-    }
-}
-
 impl MuonCoreCytron {
     pub fn new() -> MuonCoreCytron {
         MuonCoreCytron {
             base: ComponentBase::default(),
-            reg_file: RegFile::default(),
-            decode_unit: DecodeUnit,
-            execute_unit: ExecuteUnit::default(),
-            imem_req: Port::new(),
-            imem_resp: Port::new()
+            scheduler: Scheduler::default(),
+            warps: vec![],
+            imem_req: Default::default(),
+            imem_resp: Default::default(),
         }
     }
 

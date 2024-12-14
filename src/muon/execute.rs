@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use log::{debug, info};
-use crate::base::behavior::{Resets, Stalls, Ticks};
-use crate::base::component::{ComponentBase, IsComponent};
+use crate::base::behavior::{Parameterizable, Resets, Stalls, Ticks};
+use crate::base::component::{base_boilerplate, ComponentBase, IsComponent};
 use crate::base::mem::HasMemory;
 use crate::base::state::HasState;
+use crate::muon::config::MuonConfig;
 use crate::muon::decode::DecodedInst;
 use crate::muon::isa::{InstAction, ISA};
+use crate::muon::warp::Warp;
 
 pub struct Writeback {
     pub rd_addr: u8,
@@ -53,7 +55,7 @@ struct ExecuteUnitState {
 
 #[derive(Default)]
 pub struct ExecuteUnit {
-    base: ComponentBase<ExecuteUnitState>,
+    base: ComponentBase<ExecuteUnitState, MuonConfig, Warp>,
 }
 
 impl Ticks for ExecuteUnit {
@@ -69,8 +71,8 @@ impl Resets for ExecuteUnit {
 impl Stalls for ExecuteUnit {}
 impl HasState for ExecuteUnit {}
 
-impl IsComponent<ExecuteUnitState> for ExecuteUnit {
-    fn get_base(&mut self) -> &mut ComponentBase<ExecuteUnitState> { &mut self.base }
+impl IsComponent<ExecuteUnitState, MuonConfig, Warp> for ExecuteUnit {
+    base_boilerplate!(ExecuteUnitState, MuonConfig, Warp);
 }
 
 impl ExecuteUnit {

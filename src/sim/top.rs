@@ -1,12 +1,22 @@
+use std::path::Path;
 use std::sync::Arc;
 use crate::base::mem::*;
 use crate::base::behavior::*;
 use crate::muon::core_cytron::MuonCoreCytron;
+use crate::muon::config::MuonConfig;
 use crate::sim::elf::ElfBackedMem;
+
+#[derive(Default, Clone)]
+pub struct CyclotronTopConfig {
+    pub timeout: u64,
+    pub elf_path: String,
+    pub muon_config: MuonConfig,
+}
 
 pub struct CyclotronTop {
     pub imem: ElfBackedMem,
     pub muon: MuonCoreCytron,
+    pub config: Parameters<CyclotronTopConfig>,
 
     pub timeout: u64
 }
@@ -19,8 +29,21 @@ impl CyclotronTop {
         CyclotronTop {
             imem: perfect_imem,
             muon: muon_core,
-            timeout: 0
+            config: Default::default(),
+            timeout: 1000
         }
+    }
+}
+
+impl Parameterizable<CyclotronTopConfig> for CyclotronTop {
+    fn conf(&self) -> &CyclotronTopConfig {
+        self.config.c.get().unwrap()
+    }
+
+    fn init_conf(&mut self, c: CyclotronTopConfig) {
+        self.muon.init_conf(c.muon_config.clone());
+        self.imem.load_path(Path::new(&c.elf_path)).expect("elf not found");
+        self.config.c.set(c).map_err(|_| "").unwrap();
     }
 }
 
@@ -38,23 +61,5 @@ impl Ticks for CyclotronTop {
         }
         self.imem.tick_one(); // useless now
         self.muon.tick_one();
-    }
-}
-
-impl Parameterizable for CyclotronTop {
-    fn get_children(&mut self) -> Vec<Box<&mut dyn Parameterizable>> {
-        vec![Box::new(&mut self.imem), Box::new(&mut self.muon)]
-    }
-
-    fn get_self_prefixes(&self) -> Vec<String> {
-        vec!["sim.timeout".to_string()]
-    }
-
-    fn configure_self(&mut self, prefix: &str, config: &str) -> Result<(), String> {
-        match prefix {
-            "sim.timeout" => { self.timeout = config.parse().map_err(|_| "bad timeout value")? }
-            _ => {}
-        }
-        Ok(())
     }
 }

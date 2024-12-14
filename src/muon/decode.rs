@@ -2,8 +2,9 @@ extern crate num;
 
 use std::fmt::Formatter;
 use crate::base::behavior::{Resets, Stalls, Ticks};
-use crate::base::component::{ComponentBase, IsComponent};
+use crate::base::component::{base_boilerplate, ComponentBase, IsComponent};
 use crate::base::state::HasState;
+use crate::muon::warp::Warp;
 use crate::utils::*;
 
 pub struct DecodedInst {
@@ -48,7 +49,7 @@ impl Default for RegFileState {
 
 #[derive(Default)]
 pub struct RegFile {
-    base: ComponentBase<RegFileState>,
+    base: ComponentBase<RegFileState, (), Warp>,
 }
 
 // TODO: implement timing behavior for the regfile
@@ -67,10 +68,8 @@ impl Resets for RegFile {
 }
 impl HasState for RegFile {}
 
-impl IsComponent<RegFileState> for RegFile {
-    fn get_base(&mut self) -> &mut ComponentBase<RegFileState> {
-        &mut self.base
-    }
+impl IsComponent<RegFileState, (), Warp> for RegFile {
+    base_boilerplate!(RegFileState, (), Warp);
 }
 
 impl RegFile {
