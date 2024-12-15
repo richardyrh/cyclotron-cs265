@@ -87,7 +87,7 @@ impl ComponentBehaviors for Scheduler {
             let ready = self.base.state.active_warps.bit(wid) && !port.blocked();
             if ready {
                 let &pc = &self.base.state.pc[wid];
-                port.put(ScheduleOut {
+                port.put(&ScheduleOut {
                     pc,
                     mask: self.base.state.thread_masks[wid],
                     active_warps: self.base.state.active_warps,
@@ -99,21 +99,29 @@ impl ComponentBehaviors for Scheduler {
         });
     }
 
-    fn reset(&'_ mut self) {
+    fn reset(&mut self) {
         let num_lanes = (&self.conf().num_lanes).clone();
         let tmask = ((1u64 << num_lanes) - 1u64) as u32;
         self.state().thread_masks = [tmask].repeat(num_lanes);
-        // self.base.state.active_warps = 1;
-        // self.update_csr();
+        self.base.state.active_warps = 1;
     }
 }
 
 component!(Scheduler, SchedulerState, MuonConfig,
     fn new(config: Arc<MuonConfig>) -> Scheduler {
-        info!("scheduler instantiated!");
         let num_warps = config.num_warps;
+        info!("scheduler instantiated with {} warps!", num_warps);
         let mut me = Scheduler {
-            base: Default::default(),
+            base: ComponentBase::<SchedulerState, MuonConfig> {
+                state: SchedulerState {
+                    active_warps: 0,
+                    thread_masks: vec![0u32; num_warps],
+                    pc: vec![0x80000000u32; num_warps],
+                    _ipdom_stack: vec![0; num_warps],
+                    end_stall: vec![false; num_warps],
+                },
+                ..ComponentBase::default()
+            },
             schedule: vec![Port::new(); num_warps],
             schedule_wb: vec![Port::new(); num_warps],
         };

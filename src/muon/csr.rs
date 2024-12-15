@@ -3,12 +3,7 @@ use std::sync::{Arc, RwLock};
 use crate::base::behavior::*;
 use crate::base::component::*;
 use crate::muon::config::MuonConfig;
-
-pub enum CSROp {
-    CLEAR, // AND value
-    SET,   // OR value
-    WRITE  // replace value
-}
+use crate::muon::isa::CSRType;
 
 #[derive(Default)]
 pub struct CSRState {
@@ -43,21 +38,19 @@ component!(CSRFile, CSRState, MuonConfig,
 
 macro_rules! get_ref_rw_match {
     ($self:expr, $variable:expr, [$( $addr:expr, $init:expr );* $(;)?]) => {
-        #[allow(unreachable_patterns)]
-        match $variable { $(
-            $addr => Some($self.base.state.csr.entry($addr).or_insert($init)),
+        match $variable {
+            $( $addr => Some($self.base.state.csr.entry($addr).or_insert($init)), )*
             _ => None,
-        )* }
+        }
     };
 }
 
 macro_rules! get_ro_match {
     ($self:expr, $variable:expr, [$( $addr:expr, $init:expr );* $(;)?]) => {
-        #[allow(unreachable_patterns)]
-        match $variable { $(
-            $addr => Some($init),
+        match $variable {
+            $( $addr => Some($init), )*
             _ => None,
-        )* }
+        }
     };
 }
 
@@ -147,13 +140,13 @@ impl CSRFile {
         ])
     }
 
-    pub fn user_access(&mut self, addr: u32, value: u32, op: CSROp) -> u32 {
+    pub fn user_access(&mut self, addr: u32, value: u32, op: CSRType) -> u32 {
         if let Some(w) = self.csr_rw_ref_user(addr) { // writable
             let old_value = w.clone();
             match op {
-                CSROp::CLEAR => { *w &= value }
-                CSROp::SET => { *w = value }
-                CSROp::WRITE => { *w |= value }
+                CSRType::RC | CSRType::RCI => { *w &= value }
+                CSRType::RS | CSRType::RSI => { *w = value }
+                CSRType::RW | CSRType::RWI => { *w |= value }
             }
             old_value
         } else { // read-only
@@ -163,6 +156,6 @@ impl CSRFile {
     }
 
     pub fn emu_access(&mut self, addr :u32, value: u32) {
-        *self.csr_rw_ref_emu(addr).expect(&format!("setting nonexistent csr {}", addr)) = value
+        *self.csr_rw_ref_emu(addr).expect(&format!("setting nonexistent csr 0x{:x}", addr)) = value
     }
 }

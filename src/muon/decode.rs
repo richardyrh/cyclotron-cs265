@@ -18,6 +18,7 @@ pub struct DecodedInst {
     pub f7: u8,
     pub imm32: i32,
     pub imm24: i32,
+    pub imm8: i32,
     pub pc: u32,
     pub raw: [u8; 8],
 }
@@ -100,6 +101,7 @@ impl DecodeUnit {
         let rs3_addr: u8 = inst.sel(43, 36) as u8;
         let rs4_addr: u8 = inst.sel(51, 44) as u8;
 
+        let imm8: i32 = sign_ext::<8>(rs1_addr as u32);
         let imm24: i32 = sign_ext::<24>(inst.sel(59, 36) as u32);
         let uimm32: u32 = (inst.sel(59, 36) as u32) | ((inst.sel(35, 28) as u32) << 24);
 
@@ -117,6 +119,7 @@ impl DecodeUnit {
             f7: inst.sel(58, 52) as u8,
             imm32: uimm32 as i32,
             imm24,
+            imm8,
             pc,
             raw: inst_data
         }

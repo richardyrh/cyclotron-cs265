@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use log::{info};
 use num_traits::FromPrimitive;
@@ -7,7 +6,8 @@ use crate::base::component::{component, ComponentBase, IsComponent};
 use crate::base::mem::HasMemory;
 use crate::muon::config::MuonConfig;
 use crate::muon::decode::DecodedInst;
-use crate::muon::isa::{InstAction, SFUType, ISA};
+use crate::muon::isa::{CSRType, InstAction, SFUType, ISA};
+use crate::sim::top::GMEM;
 
 pub struct Writeback {
     pub inst: DecodedInst,
@@ -15,6 +15,7 @@ pub struct Writeback {
     pub rd_data: u32,
     pub set_pc: Option<u32>,
     pub sfu_type: Option<SFUType>,
+    pub csr_type: Option<CSRType>,
 }
 
 // not deriving default here since if this changes in the future
@@ -27,56 +28,27 @@ impl Default for Writeback {
             rd_data: 0,
             set_pc: None,
             sfu_type: None,
+            csr_type: None,
         }
     }
 }
 
-// a sparse memory structure that initializes anything read with 0
-// TODO: this needs to work with imem
-#[derive(Default)]
-struct ToyMemory {
-    mem: HashMap<usize, u32>,
-}
-
-impl HasMemory for ToyMemory {
-    fn read<const N: usize>(&mut self, addr: usize) -> Option<Arc<[u8; N]>> {
-        assert!((N % 4 == 0) && N > 0, "word sized requests only");
-        let words: Vec<_> = (addr..addr + N).step_by(4).map(|a| {
-            if !self.mem.contains_key(&a) {
-                self.mem.insert(a, 0u32);
-            }
-            self.mem[&a]
-        }).collect();
-
-        let byte_array: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
-        Some(Arc::new(byte_array.try_into().unwrap()))
-    }
-
-    fn write<const N: usize>(&mut self, addr: usize, data: Arc<[u8; N]>) -> Result<(), String> {
-        assert!((N % 4 == 0) && N > 0, "word sized requests only");
-        (0..N).step_by(4).for_each(|a| {
-            let write_slice = &data[a..a + 4];
-            self.mem.insert(addr + a, u32::from_le_bytes(write_slice.try_into().unwrap()));
-        });
-        Ok(())
-    }
-}
 
 #[derive(Default)]
-pub struct ExecuteUnitState {
-    dmem: ToyMemory,
-}
+pub struct ExecuteUnitState {}
 
 #[derive(Default)]
 pub struct ExecuteUnit {
     base: ComponentBase<ExecuteUnitState, MuonConfig>,
+    // pub dmem_req: Port<OutputPort, MemRequest>,
+    // pub dmem_resp: Port<InputPort, MemResponse>,
 }
 
 impl ComponentBehaviors for ExecuteUnit {
     fn tick_one(&mut self) {}
 
     fn reset(&mut self) {
-        self.base.state.dmem.mem.clear();
+
     }
 }
 
@@ -99,22 +71,21 @@ impl ExecuteUnit {
 
         let mut writeback = Writeback {
             inst: decoded,
-            rd_addr: 0,
-            rd_data: 0,
-            set_pc: None,
-            sfu_type: None,
+            ..Writeback::default()
         };
         if (actions & InstAction::WRITE_REG) > 0 {
             writeback.rd_addr = decoded.rd;
             writeback.rd_data = alu_result;
         }
         if (actions & InstAction::MEM_LOAD) > 0 {
-            let load_data_bytes = self.base.state.dmem.read::<4>(alu_result as usize);
+            let load_data_bytes = GMEM.write().expect("lock poisoned").read::<4>(
+                alu_result as usize).expect("store failed");
             writeback.rd_addr = decoded.rd;
-            writeback.rd_data = u32::from_le_bytes(*load_data_bytes.unwrap());
+            writeback.rd_data = u32::from_le_bytes(*load_data_bytes);
         }
         if (actions & InstAction::MEM_STORE) > 0 {
-            self.base.state.dmem.write::<4>(alu_result as usize, Arc::new(decoded.rs2.to_le_bytes())).unwrap();
+            GMEM.write().expect("lock poisoned").write::<4>(
+                alu_result as usize, Arc::new(decoded.rs2.to_le_bytes())).expect("store failed");
         }
         if (actions & InstAction::SET_REL_PC) > 0 {
             writeback.set_pc = (alu_result != 0).then(|| decoded.pc + alu_result);
@@ -131,6 +102,11 @@ impl ExecuteUnit {
         }
         if (actions & InstAction::SFU) > 0 {
             writeback.sfu_type = Some(SFUType::from_u32(alu_result).unwrap())
+        }
+        if (actions & InstAction::CSR) > 0 {
+            writeback.csr_type = Some(CSRType::from_u32(alu_result).unwrap());
+            writeback.rd_addr = decoded.rd;
+            writeback.rd_data = decoded.imm32 as u32;
         }
 
         writeback

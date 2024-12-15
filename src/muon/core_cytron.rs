@@ -67,6 +67,9 @@ component!(MuonCoreCytron, MuonState, MuonConfig,
 impl ComponentBehaviors for MuonCoreCytron {
     fn tick_one(&mut self) {
         self.scheduler.tick_one();
+        if let Some(sched) = self.scheduler.schedule[0].peek() {
+            info!("warp 0 schedule={}", sched.pc);
+        }
 
         self.warps.iter_mut().for_each(ComponentBehaviors::tick_one);
 

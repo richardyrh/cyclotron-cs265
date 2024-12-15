@@ -30,7 +30,7 @@ pub struct MemRequest {
 
 impl<D> Port<D, MemRequest> {
     pub fn read<const N: usize>(&mut self, addr: usize) -> bool {
-        self.put(MemRequest {
+        self.put(&MemRequest {
             address: addr,
             size: N,
             op: MemReqOp::Get,
@@ -39,7 +39,7 @@ impl<D> Port<D, MemRequest> {
     }
 
     pub fn write<const N: usize>(&mut self, addr: usize, data: Arc<[u8; N]>) -> bool {
-        self.put(MemRequest {
+        self.put(&MemRequest {
             address: addr,
             size: N,
             op: MemReqOp::Put,

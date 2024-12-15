@@ -51,6 +51,7 @@ impl InstAction {
     pub const LINK: u32          = 1 << 5;
     pub const FENCE: u32         = 1 << 6;
     pub const SFU: u32           = 1 << 7;
+    pub const CSR: u32           = 1 << 8;
 }
 
 #[derive(FromPrimitive, Clone, Copy)]
@@ -61,6 +62,16 @@ pub enum SFUType {
     JOIN   = 3,
     BAR    = 4,
     PRED   = 5,
+}
+
+#[derive(FromPrimitive, Clone, Copy)]
+pub enum CSRType {
+    RW  = 1,
+    RS  = 2,
+    RC  = 3,
+    RWI = 5,
+    RSI = 6,
+    RCI = 7,
 }
 
 pub trait OpImp<const N: usize> {
@@ -101,6 +112,10 @@ pub struct InstImp<const N: usize> {
 }
 
 impl InstImp<0> {
+    pub fn nul_f3(name: &str, opcode: Opcode, f3: u8, actions: u32, op: fn() -> u32) -> InstImp<0> {
+        InstImp::<0> { name: name.to_string(), opcode, f3: Some(f3), f7: None, actions, op: Box::new(op) }
+    }
+    
     pub fn nul_f3_f7(name: &str, opcode: Opcode, f3: u8, f7: u8, actions: u32, op: fn() -> u32) -> InstImp<0> {
         InstImp::<0> { name: name.to_string(), opcode, f3: Some(f3), f7: Some(f7), actions, op: Box::new(op) }
     }
@@ -187,6 +202,12 @@ impl ISA {
     #[allow(unused_variables)]
     pub fn get_insts() -> Vec<Box<InstGroup>> {
         let sfu_inst_imps: Vec<InstImp<0>>  = vec![
+            InstImp::nul_f3("csrrw",  Opcode::System, 1, InstAction::CSR, || CSRType::RW as u32),
+            InstImp::nul_f3("csrrs",  Opcode::System, 2, InstAction::CSR, || CSRType::RS as u32),
+            InstImp::nul_f3("csrrc",  Opcode::System, 3, InstAction::CSR, || CSRType::RC as u32),
+            InstImp::nul_f3("csrrwi", Opcode::System, 5, InstAction::CSR, || CSRType::RWI as u32),
+            InstImp::nul_f3("csrrsi", Opcode::System, 6, InstAction::CSR, || CSRType::RSI as u32),
+            InstImp::nul_f3("csrrci", Opcode::System, 7, InstAction::CSR, || CSRType::RCI as u32),
             // sets thread mask to rs1[NT-1:0]
             InstImp::nul_f3_f7("vx_tmc",    Opcode::Custom0, 0, 0, InstAction::SFU, || SFUType::TMC as u32),
             // spawns rs1 warps, except the executing warp, and set their pc's to rs2

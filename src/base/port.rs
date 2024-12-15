@@ -4,7 +4,6 @@
 
 use std::marker::PhantomData;
 use std::sync::{Arc, OnceLock, RwLock};
-use log::debug;
 
 #[derive(Default)]
 pub struct InputPort {}
@@ -13,63 +12,69 @@ pub struct InputPort {}
 pub struct OutputPort {}
 
 #[derive(Default)]
-pub struct Port<D, T> {
-    valid: OnceLock<Arc<RwLock<bool>>>,
-    // time: u64,
+pub struct PortContent<T: Clone> {
+    valid: bool,
     data: T,
+}
+
+#[derive(Default)]
+pub struct Port<D, T: Clone> {
+    lock: OnceLock<Arc<RwLock<PortContent<T>>>>,
+    // time: u64,
     direction: PhantomData<D>,
 }
 
 impl<D, T: Clone> Clone for Port<D, T> {
     fn clone(&self) -> Self {
         Self {
-            valid: OnceLock::new(),
-            data: self.data.clone(),
+            lock: OnceLock::new(),
             direction: self.direction,
         }
     }
 }
 
-impl<D, T: Default> Port<D, T> {
+impl<D, T: Default + Clone> Port<D, T> {
     pub fn new() -> Port<D, T> {
         Port {
-            valid: OnceLock::new(),
-            data: T::default(),
+            lock: OnceLock::new(),
             direction: PhantomData
         }
     }
 
     pub fn valid(&self) -> bool {
-        self.valid.get().expect("port lock not set").read().expect("rw lock poisoned").clone()
+        self.lock.get().expect("port lock not set").read().expect("rw lock poisoned").valid.clone()
     }
 }
 
-impl<OutputPort, T: Default> Port<OutputPort, T> {
+impl<OutputPort, T: Default + Clone> Port<OutputPort, T> {
     pub fn blocked(&self) -> bool {
         self.valid()
     }
 
     // returns true if port was ready and put succeeded.
-    pub fn put(&mut self, data: T/*, time: u64*/) -> bool {
+    pub fn put(&mut self, data: &T/*, time: u64*/) -> bool {
         if self.blocked() {
             return false;
         }
         // self.time = time;
-        *self.valid.get().expect("lock not set").write().expect("lock poisoned") = true;
-        self.data = data;
+        let body = &mut self.lock.get().expect("lock not set").write().expect("lock poisoned");
+        body.data = data.clone();
+        body.valid = true;
         true
     }
 }
 
-impl<InputPort, T: Default> Port<InputPort, T> {
-    pub fn peek(&self) -> Option<&T> {
-        self.valid().then_some(&self.data)
+impl<InputPort, T: Default + Clone> Port<InputPort, T> {
+    pub fn peek(&self) -> Option<T> {
+        let body = &mut self.lock.get().expect("lock not set").read().expect("lock poisoned");
+        body.valid.then_some(body.data.clone())
     }
-
-    pub fn get(&mut self) -> Option<&T> {
+    
+    pub fn get(&mut self) -> Option<T> {
         self.valid().then(|| {
-            *self.valid.get().expect("lock not set").write().expect("lock poisoned") = false;
-            &self.data
+            let body = &mut self.lock.get().expect("lock not set").write().expect("lock poisoned");
+            body.valid = false;
+            body.data.clone()
         })
     }
 }
@@ -77,16 +82,19 @@ impl<InputPort, T: Default> Port<InputPort, T> {
 /// transfers data from an output port to an input port of the same type,
 /// by giving them the same valid boolean
 pub fn link<A, B, T: Default + Clone>
-    (a: &mut Port<A, T>, b: &mut Port<B, T>) -> Arc<RwLock<bool>> {
+    (a: &mut Port<A, T>, b: &mut Port<B, T>) -> Arc<RwLock<PortContent<T>>> {
 
-    let lock = Arc::new(RwLock::new(false));
-    a.valid.set(lock.clone()).expect("lock already set");
-    b.valid.set(lock.clone()).expect("lock already set");
+    let lock = Arc::new(RwLock::new(PortContent::<T> {
+        valid: false,
+        data: T::default()
+    }));
+    a.lock.set(lock.clone()).map_err(|_| "").expect("lock already set");
+    b.lock.set(lock.clone()).map_err(|_| "").expect("lock already set");
     lock
 }
 
 pub fn link_vec<A, B, T: Default + Clone>
-    (a: &mut Vec<&mut Port<A, T>>, b: &mut Vec<&mut Port<B, T>>) -> Vec<Arc<RwLock<bool>>>{
+    (a: &mut Vec<&mut Port<A, T>>, b: &mut Vec<&mut Port<B, T>>) -> Vec<Arc<RwLock<PortContent<T>>>>{
 
     a.iter_mut().zip(b.iter_mut()).map(|(o, i)| link(o, i)).collect::<Vec<_>>()
 }

@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use log::info;
 use crate::base::behavior::*;
 use crate::base::component::{component_inner, ComponentBase, IsComponent};
 
@@ -39,18 +40,22 @@ impl<T: Default, const N: usize> IsComponent for Queue<T, N> {
 }
 
 // TODO: add locks and stuff
-impl<T: Default, const N: usize> Queue<T, N> {
-    pub fn try_enq(&mut self, data: T) -> bool {
+impl<T: Default + Clone, const N: usize> Queue<T, N> {
+    pub fn try_enq(&mut self, data: &T) -> bool {
+        info!("enqueue data");
         let size = self.state().size;
         let max_size = self.state().max_size;
         if size >= max_size {
             return false;
         }
-        self.state().storage[size] = data;
+        info!("enqueue data success");
+        self.state().storage[size] = data.clone();
+        self.state().size += 1;
         true
     }
 
     pub fn try_deq(&mut self) -> Option<T> where T: Clone {
+        info!("dequeue data");
         let size = self.state().size;
         (size > 0).then(|| {
             self.state().size -= 1;

@@ -1,3 +1,5 @@
+extern crate lazy_static;
+
 use std::error::Error;
 use std::sync::Arc;
 use cyclotron::base::behavior::*;

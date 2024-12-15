@@ -10,7 +10,7 @@ use crate::muon::config::{LaneConfig, MuonConfig};
 use crate::muon::csr::CSRFile;
 use crate::muon::decode::{DecodeUnit, DecodedInst, RegFile};
 use crate::muon::execute::{ExecuteUnit, Writeback};
-use crate::muon::isa::SFUType;
+use crate::muon::isa::{CSRType, SFUType};
 use crate::muon::scheduler::ScheduleOut;
 use crate::utils::BitSlice;
 
@@ -65,7 +65,7 @@ impl ComponentBehaviors for Warp {
         // fetch
         if let Some(schedule) = self.schedule.get() {
             if schedule.end_stall || !self.base.state.stalled {
-                if !self.imem_req.blocked() && self.fetch_queue.try_enq(schedule.into()) {
+                if !self.imem_req.blocked() && self.fetch_queue.try_enq(&(&schedule).into()) {
                     assert!(self.imem_req.read::<8>(schedule.pc as usize));
                 }
             }
@@ -86,8 +86,8 @@ impl ComponentBehaviors for Warp {
             println!("cycle={}, pc={:08x}", self.base.cycle, metadata.pc);
             let writebacks: Vec<_> = (0..self.conf().num_lanes).map(|lane_id| {
                 self.lanes[lane_id].csr_file.emu_access(0xcc3, metadata.active_warps);
-                self.lanes[lane_id].csr_file.emu_access(0xcc4, metadata.mask)
-                ;
+                self.lanes[lane_id].csr_file.emu_access(0xcc4, metadata.mask);
+
                 if !metadata.mask.bit(lane_id) {
                     return Writeback::default();
                 }
@@ -113,7 +113,29 @@ impl ComponentBehaviors for Warp {
                     branch: Some(pc),
                     sfu: None,
                 }
-            }).or(writebacks[0].sfu_type.map(|sfu| {
+            }).or(writebacks[0].csr_type.map(|csr| {
+                writebacks.iter().enumerate().for_each(|(lane_id, writeback)| {
+                    if [0xcc3, 0xcc4].contains(&writeback.rd_data) {
+                        panic!("unimplemented mask write using csr");
+                    }
+                    let csr_mut = &mut self.lanes[lane_id].csr_file;
+                    let old_val = csr_mut.user_access(writeback.rd_data, match csr {
+                        CSRType::RW | CSRType::RS | CSRType::RC => {
+                            writeback.inst.rs1
+                        }
+                        CSRType::RWI | CSRType::RSI | CSRType::RCI => {
+                            writeback.inst.imm8 as u32
+                        }
+                    }, csr);
+                    let rf_mut = &mut self.lanes[lane_id].reg_file;
+                    rf_mut.write_gpr(writeback.rd_addr, old_val);
+                });
+                ScheduleWriteback {
+                    insts: writebacks.iter().map(|w| w.inst).collect(),
+                    branch: None,
+                    sfu: None,
+                }
+            })).or(writebacks[0].sfu_type.map(|sfu| {
                 self.state().stalled = true;
                 ScheduleWriteback {
                     insts: writebacks.iter().map(|w| w.inst).collect(),
@@ -121,7 +143,7 @@ impl ComponentBehaviors for Warp {
                     sfu: Some(sfu),
                 }
             })).map(|wb| {
-                assert!(self.schedule_wb.put(wb));
+                assert!(self.schedule_wb.put(&wb));
             });
         }
     }
