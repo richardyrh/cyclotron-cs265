@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 use std::sync::{RwLock, RwLockWriteGuard};
-use crate::base::behavior::{Parameterizable, Resets, Stalls, Ticks};
+use crate::base::behavior::*;
 use crate::base::component::*;
-use crate::base::state::HasState;
-use crate::muon::warp::Warp;
+use crate::muon::config::LaneConfig;
 
 pub enum CSROp {
     CLEAR, // AND value
@@ -19,28 +18,27 @@ pub struct CSRState {
 // this is instantiated per lane
 #[derive(Default)]
 pub struct CSRFile {
-    base: ComponentBase<CSRState, (), Warp>,
+    base: ComponentBase<CSRState, LaneConfig>,
     lock: RwLock<()>,
 }
 
-impl Ticks for CSRFile {
+impl ComponentBehaviors for CSRFile {
     fn tick_one(&mut self) {
         // TODO: count cycles and stuff
     }
-}
 
-impl Resets for CSRFile {
     fn reset(&mut self) {
         self.base.state.csr.clear();
     }
 }
 
-impl Stalls for CSRFile {}
-impl HasState for CSRFile {}
-
-impl IsComponent<CSRState, (), Warp> for CSRFile {
-    base_boilerplate!(CSRState, (), Warp);
-}
+component!(CSRFile, CSRState, LaneConfig,
+    fn new(_config: &LaneConfig) -> Self {
+        let mut csr = CSRFile::default();
+        csr.lock = RwLock::new(());
+        csr
+    }
+);
 
 macro_rules! get_ref_rw_match {
     ($self:expr, $variable:expr, [$( $addr:expr, $init:expr );* $(;)?]) => {
@@ -63,14 +61,11 @@ macro_rules! get_ro_match {
 }
 
 impl CSRFile {
-    pub fn new() -> Self {
-        let mut csr = CSRFile::default();
-        csr.lock = RwLock::new(());
-        csr
-    }
 
     // these are constant values
     fn csr_ro_ref(&self, addr: u32) -> Option<u32> {
+        let mhartid = self.conf().num_warps * self.conf().core_id +
+            self.conf().num_lanes * self.conf().warp_id + self.conf().lane_id;
         get_ro_match!(self, addr, [
             0xf11, 0; // mvendorid
             0xf12, 0; // marchid
@@ -114,22 +109,24 @@ impl CSRFile {
             0x3b0, 0; // pmpaddr0
             0xb01, 0; // mpm_reserved
             0xb81, 0; // mpm_reserved_h
+
+            0xf14, mhartid as u32; // mhartid
+            0xcc0, self.conf().lane_id as u32; // thread_id
+            0xcc1, self.conf().warp_id as u32; // warp_id
+            0xcc2, self.conf().core_id as u32; // core_id
+            0xfc0, self.conf().num_lanes as u32; // num_threads
+            0xfc1, self.conf().num_warps as u32; // num_warps
+            0xfc2, self.conf().num_cores as u32; // num_cores
         ])
     }
 
     // these can only be read by the user,
     // but the emulator can update them
     fn csr_rw_ref_emu(&mut self, addr: u32) -> Option<&mut u32> {
+        let _lock = self.lock.write().expect("lock poisoned");
         get_ref_rw_match!(self, addr, [
-            0xf14, 0; // mhartid
-            0xcc0, 0; // thread_id
-            0xcc1, 0; // warp_id
-            0xcc2, 0; // core_id
             0xcc3, 0; // warp_mask
             0xcc4, 0; // thread_mask
-            0xfc0, 0; // num_threads
-            0xfc1, 0; // num_warps
-            0xfc2, 0; // num_cores
             0xb00, 0; // mcycle
             0xb80, 0; // mcycle_h
             0xb02, 0; // minstret
@@ -144,13 +141,12 @@ impl CSRFile {
             0x001, 0; // vx_fflags
             0x002, 0; // vx_frm
             0x003, 0; // vx_fcsr
-
         ])
     }
 
     pub fn user_access(&mut self, addr: u32, value: u32, op: CSROp) -> u32 {
         if let Some(&mut mut w) = self.csr_rw_ref_user(addr) { // writable
-            let _ = self.lock.write().expect("lock poisoned");
+            let _lock = self.lock.write().expect("lock poisoned");
             let old_value = w.clone();
             match op {
                 CSROp::CLEAR => { w &= value }
@@ -159,14 +155,12 @@ impl CSRFile {
             }
             old_value
         } else {
-            let _ = self.lock.read().expect("lock poisoned");
             self.csr_rw_ref_emu(addr).map(|x| *x).or(self.csr_ro_ref(addr))
                 .expect(&format!("reading nonexistent csr {}", addr))
         }
     }
 
     pub fn emu_access(&mut self, addr :u32, value: u32) {
-        let _ = self.lock.write().expect("lock poisoned");
         *self.csr_rw_ref_emu(addr).expect(&format!("setting nonexistent csr {}", addr)) = value
     }
 }

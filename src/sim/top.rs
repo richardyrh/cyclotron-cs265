@@ -2,6 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 use crate::base::mem::*;
 use crate::base::behavior::*;
+use crate::base::component::IsComponent;
 use crate::muon::core_cytron::MuonCoreCytron;
 use crate::muon::config::MuonConfig;
 use crate::sim::elf::ElfBackedMem;
@@ -22,32 +23,34 @@ pub struct CyclotronTop {
 }
 
 impl CyclotronTop {
-    pub fn new() -> CyclotronTop {
-        let muon_core = MuonCoreCytron::new();
+    pub fn new(config: CyclotronTopConfig) -> CyclotronTop {
         let perfect_imem = ElfBackedMem::default();
 
-        CyclotronTop {
+        let mut me = CyclotronTop {
             imem: perfect_imem,
-            muon: muon_core,
+            muon: Default::default(),
             config: Default::default(),
             timeout: 1000
-        }
+        };
+        me.muon = MuonCoreCytron::new(&config.muon_config.clone());
+
+        me
     }
 }
+//
+// impl Parameterizable<CyclotronTopConfig> for CyclotronTop<'_> {
+//     fn conf(&self) -> &CyclotronTopConfig {
+//         self.config.c.get().unwrap()
+//     }
+//
+//     fn init_conf(&mut self, c: CyclotronTopConfig) {
+//         self.muon.init_conf(c.muon_config.clone());
+//         self.imem.load_path(Path::new(&c.elf_path)).expect("elf not found");
+//         self.config.c.set(c).map_err(|_| "").unwrap();
+//     }
+// }
 
-impl Parameterizable<CyclotronTopConfig> for CyclotronTop {
-    fn conf(&self) -> &CyclotronTopConfig {
-        self.config.c.get().unwrap()
-    }
-
-    fn init_conf(&mut self, c: CyclotronTopConfig) {
-        self.muon.init_conf(c.muon_config.clone());
-        self.imem.load_path(Path::new(&c.elf_path)).expect("elf not found");
-        self.config.c.set(c).map_err(|_| "").unwrap();
-    }
-}
-
-impl Ticks for CyclotronTop {
+impl ComponentBehaviors for CyclotronTop {
     fn tick_one(&mut self) {
         if let Some(req) = self.muon.imem_req.get() {
             assert_eq!(req.size, 8, "imem read request is not 8 bytes");

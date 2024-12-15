@@ -19,6 +19,16 @@ pub struct Port<D, T> {
     direction: PhantomData<D>,
 }
 
+impl<D, T: Clone> Clone for Port<D, T> {
+    fn clone(&self) -> Self {
+        Self {
+            valid: false,
+            data: self.data.clone(),
+            direction: self.direction,
+        }
+    }
+}
+
 impl<D, T: Default> Port<D, T> {
     pub fn new() -> Port<D, T> {
         Port {

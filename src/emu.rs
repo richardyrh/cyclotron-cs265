@@ -36,7 +36,7 @@ pub fn emulator_init_rs(num_lanes: i32) {
     if sim.as_ref().is_some() {
         panic!("sim cell already initialized!");
     }
-    *sim = Some(MuonCoreCytron::new());
+    // *sim = Some(MuonCoreCytron::new());
 }
 
 #[no_mangle]

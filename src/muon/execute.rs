@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use log::{debug, info};
-use crate::base::behavior::{Parameterizable, Resets, Stalls, Ticks};
-use crate::base::component::{base_boilerplate, ComponentBase, IsComponent};
+use crate::base::behavior::*;
+use crate::base::component::{component, ComponentBase, IsComponent};
 use crate::base::mem::HasMemory;
-use crate::base::state::HasState;
 use crate::muon::config::MuonConfig;
 use crate::muon::decode::DecodedInst;
 use crate::muon::isa::{InstAction, ISA};
@@ -49,31 +48,28 @@ impl HasMemory for ToyMemory {
 }
 
 #[derive(Default)]
-struct ExecuteUnitState {
+pub struct ExecuteUnitState {
     dmem: ToyMemory,
 }
 
 #[derive(Default)]
 pub struct ExecuteUnit {
-    base: ComponentBase<ExecuteUnitState, MuonConfig, Warp>,
+    base: ComponentBase<ExecuteUnitState, MuonConfig>,
 }
 
-impl Ticks for ExecuteUnit {
+impl ComponentBehaviors for ExecuteUnit {
     fn tick_one(&mut self) {}
-}
 
-impl Resets for ExecuteUnit {
     fn reset(&mut self) {
         self.base.state.dmem.mem.clear();
     }
 }
 
-impl Stalls for ExecuteUnit {}
-impl HasState for ExecuteUnit {}
-
-impl IsComponent<ExecuteUnitState, MuonConfig, Warp> for ExecuteUnit {
-    base_boilerplate!(ExecuteUnitState, MuonConfig, Warp);
-}
+component!(ExecuteUnit, ExecuteUnitState, MuonConfig,
+    fn new(_: &MuonConfig) -> Self {
+        Default::default()
+    }
+);
 
 impl ExecuteUnit {
     pub fn execute(&mut self, decoded: DecodedInst) -> Writeback {

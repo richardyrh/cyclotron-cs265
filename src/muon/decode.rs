@@ -1,9 +1,8 @@
 extern crate num;
 
 use std::fmt::Formatter;
-use crate::base::behavior::{Resets, Stalls, Ticks};
-use crate::base::component::{base_boilerplate, ComponentBase, IsComponent};
-use crate::base::state::HasState;
+use crate::base::behavior::*;
+use crate::base::component::{component, ComponentBase, IsComponent};
 use crate::muon::warp::Warp;
 use crate::utils::*;
 
@@ -49,30 +48,28 @@ impl Default for RegFileState {
 
 #[derive(Default)]
 pub struct RegFile {
-    base: ComponentBase<RegFileState, (), Warp>,
+    base: ComponentBase<RegFileState, ()>,
 }
 
 // TODO: implement timing behavior for the regfile
-impl Ticks for RegFile {
+impl ComponentBehaviors for RegFile {
     fn tick_one(&mut self) {
     }
-}
-
-impl Stalls for RegFile {}
-impl Resets for RegFile {
     fn reset(&mut self) {
         self.base.state.gpr.fill(0u32);
         self.base.state.fpr.fill(0f32);
         self.base.state.gpr[2] = 0xffff0000u32; // sp
     }
 }
-impl HasState for RegFile {}
 
-impl IsComponent<RegFileState, (), Warp> for RegFile {
-    base_boilerplate!(RegFileState, (), Warp);
-}
+component!(RegFile, RegFileState, (),
+    fn new(_: &()) -> RegFile {
+        RegFile::default()
+    }
+);
 
 impl RegFile {
+
     pub fn read_gpr(&self, addr: u8) -> u32 {
         if addr == 0 {
             0u32

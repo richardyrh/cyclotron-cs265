@@ -2,8 +2,7 @@ use std::{collections::HashMap, fs, path::Path};
 use std::sync::Arc;
 use goblin::elf::Elf;
 use crate::base::behavior::*;
-use crate::base::component::{base_boilerplate, ComponentBase, IsComponent};
-use crate::base::state::HasState;
+use crate::base::component::{component, ComponentBase, IsComponent};
 use crate::base::mem::HasMemory;
 use crate::sim::top::CyclotronTop;
 
@@ -14,21 +13,17 @@ pub struct ElfBackedMemState {
 
 #[derive(Default)]
 pub struct ElfBackedMem {
-    pub base: ComponentBase<ElfBackedMemState, (), CyclotronTop>,
+    pub base: ComponentBase<ElfBackedMemState, ()>,
 }
 
+component!(ElfBackedMem, ElfBackedMemState, (),
+    fn new(_: &()) -> ElfBackedMem { Default::default() }
+);
 
-impl IsComponent<ElfBackedMemState, (), CyclotronTop> for ElfBackedMem {
-    base_boilerplate!(ElfBackedMemState, (), CyclotronTop);
-}
 
-impl Ticks for ElfBackedMem {
+impl ComponentBehaviors for ElfBackedMem {
     fn tick_one(&mut self) {}
 }
-
-impl Stalls for ElfBackedMem {}
-impl Resets for ElfBackedMem {}
-impl HasState for ElfBackedMem {}
 
 impl HasMemory for ElfBackedMem {
     fn read<const N: usize>(&mut self, addr: usize) -> Option<Arc<[u8; N]>> {

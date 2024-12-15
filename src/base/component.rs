@@ -1,66 +1,106 @@
-use std::sync::OnceLock;
-use crate::base::behavior::{Parameterizable, Parameters};
-use super::{behavior::{Ticks, Stalls, Resets}, state::HasState};
+use std::convert::Into;
+use std::sync::Arc;
+use crate::base::behavior::*;
 
-pub struct ComponentBase<T, C, P> {
+pub struct ComponentBase<T, C> {
     pub cycle: u64,
     pub frequency: u64,
     pub state: T,
-    pub config: Parameters<C>,
-    pub parent: OnceLock<Box<P>>,
+    pub config: Parameters<Arc<C>>,
 }
 
-impl<T: Default, C: Default, P> Default for ComponentBase<T, C, P> {
+impl<T: Default, C: Default> Default for ComponentBase<T, C> {
     fn default() -> Self {
         Self {
             cycle: 0,
             frequency: 500 << 20,
             state: T::default(),
             config: Parameters::default(),
-            parent: OnceLock::new(),
         }
     }
 }
 
-pub trait IsComponent<T: 'static, C: 'static, P: 'static>: Ticks + Stalls + Resets + HasState {
-    fn base(&mut self) -> &mut ComponentBase<T, C, P>;
-    fn base_ref(&self) -> &ComponentBase<T, C, P>;
+pub trait IsComponent: ComponentBehaviors {
+    type StateType;
+    type ConfigType;
 
-    fn parent(&mut self) -> &Box<P> {
-        self.base().parent.get().expect("no parent configured")
-    }
-    fn parent_ref(&self) -> &Box<P> {
-        self.base_ref().parent.get().expect("no parent configured")
-    }
+    fn new(config: &Self::ConfigType) -> Self;
 
-    fn state(&mut self) -> &mut T {
+    fn base(&mut self) -> &mut ComponentBase<Self::StateType, Self::ConfigType>;
+
+    fn base_ref(&self) -> &ComponentBase<Self::StateType, Self::ConfigType>;
+
+    fn state(&mut self) -> &mut Self::StateType{
         &mut self.base().state
     }
 
-    fn init(&mut self, conf: C, parent: Box<P>) {
-        IsComponent::<T, C, P>::init_conf(self, conf);
-        self.base().parent.set(parent).map_err(|_| "parent already set").unwrap();
+    fn state_ref(&self) -> &Self::StateType {
+        &self.base_ref().state
     }
 
-    fn conf(&self) -> &C where P: Parameterizable<C> {
-        self.base_ref().config.c.get().or(
-            Some(self.base_ref().parent.get().expect("cannot get config").conf())).unwrap()
+    /// get all children, parameterizable or not
+    fn get_children(&mut self) -> Vec<&mut dyn ComponentBehaviors> {
+        // Vec::<&mut dyn ComponentBehaviors>::
+        vec![]
     }
 
-    fn init_conf(&mut self, conf: C) {
-        self.base().config.c.set(conf).map_err(|_| "config already set").unwrap();
+    // get only parameterizable children
+    fn get_param_children(&mut self) -> Vec<&mut dyn Parameterizable<ConfigType=Self::ConfigType>> {
+        vec![]
+    }
+
+}
+
+impl<X> Parameterizable for X where X: IsComponent {
+    type ConfigType = X::ConfigType;
+
+    fn conf(&self) -> &Self::ConfigType {
+        self.base_ref().config.c.get().unwrap()
+    }
+
+    fn init_conf(&mut self, conf: Arc<Self::ConfigType>) {
+        self.get_param_children().iter_mut().for_each(|c| {
+            c.init_conf(conf.clone());
+        });
+        self.base().config.c.set(conf.clone()).map_err(|_| "config already set").unwrap();
     }
 }
 
-macro_rules! base_boilerplate {
-    ($T:ty, $C:ty, $P:ty) => {
-        fn base(&mut self) -> &mut ComponentBase<$T, $C, $P> {
+macro_rules! component_inner {
+    ($T:ty, $C:ty) => {
+        type StateType = $T;
+        type ConfigType = $C;
+
+        fn base(&mut self) -> &mut ComponentBase<$T, $C> {
             &mut self.base
         }
 
-        fn base_ref(&self) -> &ComponentBase<$T, $C, $P> {
+        fn base_ref(&self) -> &ComponentBase<$T, $C> {
             &self.base
         }
     };
 }
-pub(crate) use base_boilerplate;
+
+pub(crate) use component_inner;
+
+/// arguments: identifier, state type, config type, additional methods
+macro_rules! component {
+    ($comp:ident, $T:ty, $C:ty, $($method:item)*) => {
+        impl IsComponent for $comp {
+            type StateType = $T;
+            type ConfigType = $C;
+
+            fn base(&mut self) -> &mut ComponentBase<$T, $C> {
+                &mut self.base
+            }
+
+            fn base_ref(&self) -> &ComponentBase<$T, $C> {
+                &self.base
+            }
+
+            $($method)*
+        }
+    };
+}
+
+pub(crate) use component;
