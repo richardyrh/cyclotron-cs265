@@ -2,6 +2,8 @@ use crate::base::behavior::*;
 use crate::base::component::{component, ComponentBase, IsComponent};
 use crate::base::port::{InputPort, OutputPort, Port};
 use crate::muon::config::MuonConfig;
+use crate::muon::isa::SFUType;
+use crate::muon::warp::ScheduleWriteback;
 use crate::utils::{BitSlice};
 
 #[derive(Default)]
@@ -10,6 +12,7 @@ pub struct SchedulerState {
     thread_masks: Vec<u32>,
     pc: Vec<u32>,
     ipdom_stack: Vec<u32>,
+    end_stall: Vec<bool>,
 }
 
 #[derive(Default, Clone)]
@@ -17,6 +20,7 @@ pub struct ScheduleOut {
     pub pc: u32,
     pub mask: u32,
     pub active_warps: u32,
+    pub end_stall: bool,
 }
 
 // instantiated per core
@@ -24,12 +28,58 @@ pub struct ScheduleOut {
 pub struct Scheduler {
     base: ComponentBase<SchedulerState, MuonConfig>,
     pub schedule: Vec<Port<OutputPort, ScheduleOut>>,
+    pub schedule_wb: Vec<Port<InputPort, ScheduleWriteback>>,
 }
 
 impl ComponentBehaviors for Scheduler {
     fn tick_one(&mut self) {
-        // schedulable warps
-        // TODO: need to ensure active_warps = 1 => thread_mask > 0
+        let num_warps = self.conf().num_warps;
+
+        self.schedule_wb.iter_mut().enumerate().for_each(|(wid, port)| {
+            if let Some(wb) = port.get() {
+                if let Some(target_pc) = wb.branch {
+                    self.base.state.pc[wid] = target_pc;
+                    self.base.state.end_stall[wid] = true;
+                }
+                if let Some(sfu) = wb.sfu {
+                    // for warp-wide operations, we take lane 0 to be the truth
+                    match sfu {
+                        SFUType::TMC => {
+                            let tmask = wb.insts[0].rs1;
+                            self.base.state.thread_masks[wid] = tmask;
+                            if (tmask == 0) {
+                                self.base.state.active_warps.mut_bit(wid, false);
+                            }
+                        }
+                        SFUType::WSPAWN => {
+                            let start_pc = wb.insts[0].pc + 8;
+                            for i in 0..num_warps {
+                                if !self.base.state.active_warps.bit(i) {
+                                    self.base.state.pc[i] = start_pc;
+                                }
+                                self.base.state.active_warps.mut_bit(wid, true);
+                            }
+                        }
+                        SFUType::SPLIT => {
+                            let then_mask: Vec<_> = wb.insts.iter().map(|d| d.rs1.bit(0)).collect();
+                            let else_mask: Vec<_> = then_mask.iter().map(|d| !d).collect();
+                            todo!()
+                        }
+                        SFUType::JOIN => {
+                            todo!()
+                        }
+                        SFUType::BAR => {
+                            todo!()
+                        }
+                        SFUType::PRED => {
+                            todo!()
+                        }
+                    }
+                    self.base.state.end_stall[wid] = true;
+                }
+            }
+        });
+
         self.schedule.iter_mut().enumerate().for_each(|(wid, port)| {
             let ready = self.base.state.active_warps.bit(wid) && !port.blocked();
             if ready {
@@ -38,7 +88,9 @@ impl ComponentBehaviors for Scheduler {
                     pc,
                     mask: self.base.state.thread_masks[wid],
                     active_warps: self.base.state.active_warps,
+                    end_stall: self.base.state.end_stall[wid],
                 });
+                self.base.state.end_stall[wid] = false;
                 *(&mut self.base.state.pc[wid]) += 8;
             }
         });
@@ -58,7 +110,8 @@ component!(Scheduler, SchedulerState, MuonConfig,
         let num_warps = config.num_warps;
         Scheduler {
             base: Default::default(),
-            schedule: vec![Default::default(); num_warps],
+            schedule: vec![Port::new(); num_warps],
+            schedule_wb: vec![Port::new(); num_warps],
         }
     }
 );
@@ -66,20 +119,9 @@ component!(Scheduler, SchedulerState, MuonConfig,
 impl Scheduler {
 
     pub fn tmc(&mut self, wid: usize, tmask: u32) {
-        self.base.state.thread_masks[wid] = tmask;
-        if (tmask == 0) {
-            self.base.state.active_warps.mut_bit(wid, false);
-        }
     }
 
     pub fn wspawn(&mut self, wid: usize, curr_pc: u32, num_warps: usize) {
-        let start_pc = curr_pc + 8;
-        for i in 0..num_warps {
-            if !self.base.state.active_warps.bit(i) {
-                self.base.state.pc[i] = start_pc;
-            }
-            self.base.state.active_warps.mut_bit(wid, true);
-        }
     }
 
     pub fn split(&mut self, wid: usize, then_mask: u32) -> u32 {
@@ -88,9 +130,5 @@ impl Scheduler {
 
     pub fn join(&mut self, wid: usize, divergent: bool) {
         todo!();
-    }
-
-    pub fn branch(&mut self, wid: usize, target_u32: u32) {
-        self.base.state.pc[wid] = target_u32;
     }
 }

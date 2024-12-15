@@ -70,6 +70,14 @@ impl<OutputPort, T: Default> Port<OutputPort, T> {
 
 impl<InputPort, T: Default> Port<InputPort, T> {
     pub fn peek(&self) -> Option<&T> {
-        self.valid.then(|| &self.data)
+        self.valid.then_some(&self.data)
+    }
+}
+
+/// transfers data from an output port to an input port of the same type,
+/// needs to be called every tick.
+pub fn link<T: Default + Clone>(from: &mut Port<OutputPort, T>, to: &mut Port<InputPort, T>) {
+    if !to.blocked() {
+        from.get().map(|x| to.put(x.clone()));
     }
 }

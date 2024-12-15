@@ -1,22 +1,37 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use log::{debug, info};
+use num_traits::FromPrimitive;
 use crate::base::behavior::*;
 use crate::base::component::{component, ComponentBase, IsComponent};
 use crate::base::mem::HasMemory;
 use crate::muon::config::MuonConfig;
 use crate::muon::decode::DecodedInst;
-use crate::muon::isa::{InstAction, ISA};
-use crate::muon::warp::Warp;
+use crate::muon::isa::{InstAction, SFUType, ISA};
 
 pub struct Writeback {
+    pub inst: DecodedInst,
     pub rd_addr: u8,
     pub rd_data: u32,
     pub set_pc: Option<u32>,
+    pub sfu_type: Option<SFUType>,
 }
 
-// a sparse memory structure that initializes
-// anything read with 0
+// not deriving default here since if this changes in the future
+// there needs to be a conscious adjustment
+impl Default for Writeback {
+    fn default() -> Self {
+        Self {
+            inst: Default::default(),
+            rd_addr: 0,
+            rd_data: 0,
+            set_pc: None,
+            sfu_type: None,
+        }
+    }
+}
+
+// a sparse memory structure that initializes anything read with 0
 // TODO: this needs to work with imem
 #[derive(Default)]
 struct ToyMemory {
@@ -83,9 +98,11 @@ impl ExecuteUnit {
         }).expect(&format!("unimplemented instruction {}", &decoded));
 
         let mut writeback = Writeback {
+            inst: decoded,
             rd_addr: 0,
             rd_data: 0,
             set_pc: None,
+            sfu_type: None,
         };
         if (actions & InstAction::WRITE_REG) > 0 {
             writeback.rd_addr = decoded.rd;
@@ -111,6 +128,9 @@ impl ExecuteUnit {
         }
         if (actions & InstAction::FENCE) > 0 {
             todo!();
+        }
+        if (actions & InstAction::SFU) > 0 {
+            writeback.sfu_type = Some(SFUType::from_u32(alu_result).unwrap())
         }
 
         writeback

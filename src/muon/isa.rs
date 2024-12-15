@@ -2,10 +2,6 @@ use log::error;
 use num_derive::FromPrimitive;
 pub use num_traits::{WrappingAdd};
 use crate::muon::decode::DecodedInst;
-use crate::utils::BitSlice;
-
-pub const NUM_THREADS: usize = 8; // TODO: should be configurable
-pub const NUM_WARPS: usize = 8;   // TODO: should be configurable
 
 #[derive(FromPrimitive, Clone)]
 pub enum Opcode {
@@ -54,16 +50,27 @@ impl InstAction {
     pub const SET_REL_PC: u32    = 1 << 4;
     pub const LINK: u32          = 1 << 5;
     pub const FENCE: u32         = 1 << 6;
-    pub const TMC: u32           = 1 << 7;
-    pub const WSPAWN: u32        = 1 << 8;
-    pub const SPLIT: u32         = 1 << 9;
-    pub const JOIN: u32          = 1 << 10;
-    pub const BARRIER: u32       = 1 << 11;
-    pub const PRED: u32          = 1 << 12;
+    pub const SFU: u32           = 1 << 7;
+}
+
+#[derive(FromPrimitive, Clone, Copy)]
+pub enum SFUType {
+    TMC    = 0,
+    WSPAWN = 1,
+    SPLIT  = 2,
+    JOIN   = 3,
+    BAR    = 4,
+    PRED   = 5,
 }
 
 pub trait OpImp<const N: usize> {
     fn run(&self, operands: [u32; N]) -> u32;
+}
+
+impl OpImp<0> for fn() -> u32 {
+    fn run(&self, _: [u32; 0]) -> u32 {
+        self()
+    }
 }
 
 impl OpImp<1> for fn(u32) -> u32 {
@@ -94,6 +101,10 @@ pub struct InstImp<const N: usize> {
 }
 
 impl InstImp<0> {
+    pub fn nul_f3_f7(name: &str, opcode: Opcode, f3: u8, f7: u8, actions: u32, op: fn() -> u32) -> InstImp<0> {
+        InstImp::<0> { name: name.to_string(), opcode, f3: Some(f3), f7: Some(f7), actions, op: Box::new(op) }
+    }
+
     pub fn una(name: &str, opcode: Opcode, actions: u32, op: fn(u32) -> u32) -> InstImp<1> {
         InstImp::<1> { name: name.to_string(), opcode, f3: None, f7: None, actions, op: Box::new(op) }
     }
@@ -145,6 +156,7 @@ impl<const N: usize> InstGroupVariant<N> {
 }
 
 pub enum InstGroup {
+    Nullary(InstGroupVariant<0>),
     Unary(InstGroupVariant<1>),
     Binary(InstGroupVariant<2>),
     Ternary(InstGroupVariant<3>),
@@ -153,6 +165,7 @@ pub enum InstGroup {
 impl InstGroup {
     pub fn execute(&self, req: &DecodedInst) -> Option<(u32, u32)> {
         match self {
+            InstGroup::Nullary(x) => { x.execute(req) }
             InstGroup::Unary(x) => { x.execute(req) }
             InstGroup::Binary(x) => { x.execute(req) }
             InstGroup::Ternary(x) => { x.execute(req) }
@@ -172,6 +185,26 @@ impl ISA {
     }
 
     pub fn get_insts() -> Vec<Box<InstGroup>> {
+        let sfu_inst_imps: Vec<InstImp<0>>  = vec![
+            // sets thread mask to rs1[NT-1:0]
+            InstImp::nul_f3_f7("vx_tmc",    Opcode::Custom0, 0, 0, InstAction::SFU, || SFUType::TMC as u32),
+            // spawns rs1 warps, except the executing warp, and set their pc's to rs2
+            InstImp::nul_f3_f7("vx_wspawn", Opcode::Custom0, 1, 0, InstAction::SFU, || SFUType::WSPAWN as u32),
+            // collect rs1[0] for then mask. divergent if mask not all 0 or 1. write divergence back. set tmc, push else mask to ipdom
+            InstImp::nul_f3_f7("vx_split",  Opcode::Custom0, 2, 0, InstAction::SFU, || SFUType::SPLIT as u32),
+            // rs1[0] indicates divergence from split. pop ipdom and set tmc if divergent
+            InstImp::nul_f3_f7("vx_join",   Opcode::Custom0, 3, 0, InstAction::SFU, || SFUType::JOIN as u32),
+            // rs1 indicates barrier id, rs2 indicates num warps participating in each core
+            InstImp::nul_f3_f7("vx_bar",    Opcode::Custom0, 4, 0, InstAction::SFU, || SFUType::BAR as u32),
+            // sets thread mask to current tmask & then_mask, same rules as split. if no lanes take branch, set mask to rs2.
+            InstImp::nul_f3_f7("vx_pred",   Opcode::Custom0, 5, 0, InstAction::SFU, || SFUType::PRED as u32),
+            InstImp::nul_f3_f7("vx_rast",   Opcode::Custom0, 0, 1, InstAction::SFU | InstAction::WRITE_REG, || todo!()),
+        ];
+        let sfu_insts = InstGroupVariant {
+            insts: sfu_inst_imps,
+            get_operands: |_| [],
+        };
+
         let r3_inst_imps: Vec<InstImp<2>> = vec![
             InstImp::bin_f3_f7("add",  Opcode::Op, 0,  0, InstAction::WRITE_REG, |a, b| { a.wrapping_add(b) }),
             InstImp::bin_f3_f7("sub",  Opcode::Op, 0, 32, InstAction::WRITE_REG, |a, b| { ((a as i32) - (b as i32)) as u32 }),
@@ -192,21 +225,6 @@ impl ISA {
             InstImp::bin_f3_f7("divu",   Opcode::Op, 5, 1, InstAction::WRITE_REG, |a, b| { a / Self::check_zero(b) }),
             InstImp::bin_f3_f7("rem",    Opcode::Op, 6, 1, InstAction::WRITE_REG, |a, b| { ((a as i32) % (Self::check_zero(b) as i32)) as u32 }),
             InstImp::bin_f3_f7("remu",   Opcode::Op, 7, 1, InstAction::WRITE_REG, |a, b| { a % Self::check_zero(b) }),
-
-            // TODO: lot of these can be unary
-            // sets thread mask to rs1[NT-1:0]
-            InstImp::bin_f3_f7("vx_tmc",    Opcode::Custom0, 0, 0, InstAction::TMC,     |a, _b| { a.sel(NUM_THREADS - 1, 0) }),
-            // spawns rs1 warps, except the executing warp, and set their pc's to rs2
-            InstImp::bin_f3_f7("vx_wspawn", Opcode::Custom0, 1, 0, InstAction::WSPAWN,  |a, _b| { a.sel(NUM_WARPS - 1, 0) }),
-            // collect rs1[0] for then mask. divergent if mask not all 0 or 1. write divergence back. set tmc, push else mask to ipdom
-            InstImp::bin_f3_f7("vx_split",  Opcode::Custom0, 2, 0, InstAction::SPLIT ,  |a, _b| { todo!() }),
-            // rs1[0] indicates divergence from split. pop ipdom and set tmc if divergent
-            InstImp::bin_f3_f7("vx_join",   Opcode::Custom0, 3, 0, InstAction::JOIN,    |a, _b| { a.sel(0, 0) }),
-            // rs1 indicates barrier id, rs2 indicates num warps participating in each core
-            InstImp::bin_f3_f7("vx_bar",    Opcode::Custom0, 4, 0, InstAction::BARRIER, |a, b| { a.wrapping_add(b) }),
-            // sets thread mask to current tmask & then_mask, same rules as split. if no lanes take branch, set mask to rs2.
-            InstImp::bin_f3_f7("vx_pred",   Opcode::Custom0, 5, 0, InstAction::PRED,    |a, b| { todo!() }),
-            InstImp::bin_f3_f7("vx_rast",   Opcode::Custom0, 0, 1, InstAction::WRITE_REG, |a, b| { todo!() }),
         ];
         let r3_insts = InstGroupVariant {
             insts: r3_inst_imps,
@@ -295,6 +313,7 @@ impl ISA {
         };
 
         vec![
+            Box::new(InstGroup::Nullary(sfu_insts)),
             Box::new(InstGroup::Unary(lui_inst)),
             Box::new(InstGroup::Binary(r3_insts)),
             Box::new(InstGroup::Binary(i2_insts)),

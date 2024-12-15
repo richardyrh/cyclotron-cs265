@@ -3,9 +3,9 @@ extern crate num;
 use std::fmt::Formatter;
 use crate::base::behavior::*;
 use crate::base::component::{component, ComponentBase, IsComponent};
-use crate::muon::warp::Warp;
 use crate::utils::*;
 
+#[derive(Default, Copy, Clone)]
 pub struct DecodedInst {
     pub opcode: u16,
     pub rd: u8,
@@ -18,12 +18,13 @@ pub struct DecodedInst {
     pub imm32: i32,
     pub imm24: i32,
     pub pc: u32,
-    pub hex_string: String
+    pub raw: [u8; 8],
 }
 
 impl std::fmt::Display for DecodedInst {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "inst 0x{} [ op: 0x{:x}, f3: {}, f7: {} ]", self.hex_string, self.opcode, self.f3, self.f7)
+        let hex_string: String = self.raw.iter().rev().map(|byte| format!("{:02X}", byte)).collect::<Vec<_>>().join("");
+        write!(f, "inst 0x{} [ op: 0x{:x}, f3: {}, f7: {} ]", hex_string, self.opcode, self.f3, self.f7)
     }
 }
 
@@ -91,7 +92,6 @@ pub struct DecodeUnit;
 impl DecodeUnit {
     pub fn decode(&self, inst_data: [u8; 8], pc: u32, rf: &RegFile) -> DecodedInst {
         let inst = u64::from_le_bytes(inst_data);
-        let hex_string: String = inst_data.iter().rev().map(|byte| format!("{:02X}", byte)).collect::<Vec<_>>().join("");
 
         let _pred: u8 = inst.sel(63, 60) as u8;
         let rs1_addr: u8 = inst.sel(27, 20) as u8;
@@ -117,7 +117,7 @@ impl DecodeUnit {
             imm32: uimm32 as i32,
             imm24,
             pc,
-            hex_string
+            raw: inst_data
         }
     }
 }

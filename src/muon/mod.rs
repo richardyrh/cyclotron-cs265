@@ -5,4 +5,4 @@ mod isa;
 mod csr;
 mod scheduler;
 mod warp;
-pub(crate) mod config;
+pub mod config;

@@ -1,17 +1,21 @@
 use std::error::Error;
 use cyclotron::base::behavior::*;
-use cyclotron::sim::top::CyclotronTop;
+use cyclotron::muon::config::MuonConfig;
+use cyclotron::sim::top::{CyclotronTop, CyclotronTopConfig};
 
 pub fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
-    log::info!("hello world");
-
-    let mut cytron_top = CyclotronTop::new();
-
-    // TODO: read a yaml and parse
-    cytron_top.configure("sim.muon.kernel_path", "hello.elf")?;
-    cytron_top.configure("sim.timeout", "1000")?;
+    let mut cytron_top = CyclotronTop::new(&CyclotronTopConfig {
+        timeout: 1000,
+        elf_path: "hello.elf".into(),
+        muon_config: MuonConfig {
+            num_lanes: 4,
+            num_warps: 4,
+            num_cores: 1,
+            lane_config: Default::default(),
+        },
+    });
 
     cytron_top.muon.reset();
     for _ in 0..cytron_top.timeout {

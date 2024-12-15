@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{RwLock, RwLockWriteGuard};
 use crate::base::behavior::*;
 use crate::base::component::*;
-use crate::muon::config::LaneConfig;
+use crate::muon::config::MuonConfig;
 
 pub enum CSROp {
     CLEAR, // AND value
@@ -18,7 +18,7 @@ pub struct CSRState {
 // this is instantiated per lane
 #[derive(Default)]
 pub struct CSRFile {
-    base: ComponentBase<CSRState, LaneConfig>,
+    base: ComponentBase<CSRState, MuonConfig>,
     lock: RwLock<()>,
 }
 
@@ -32,8 +32,8 @@ impl ComponentBehaviors for CSRFile {
     }
 }
 
-component!(CSRFile, CSRState, LaneConfig,
-    fn new(_config: &LaneConfig) -> Self {
+component!(CSRFile, CSRState, MuonConfig,
+    fn new(_config: &MuonConfig) -> Self {
         let mut csr = CSRFile::default();
         csr.lock = RwLock::new(());
         csr
@@ -64,8 +64,9 @@ impl CSRFile {
 
     // these are constant values
     fn csr_ro_ref(&self, addr: u32) -> Option<u32> {
-        let mhartid = self.conf().num_warps * self.conf().core_id +
-            self.conf().num_lanes * self.conf().warp_id + self.conf().lane_id;
+        let mhartid = self.conf().num_warps * self.conf().lane_config.core_id +
+            self.conf().num_lanes * self.conf().lane_config.warp_id +
+            self.conf().lane_config.lane_id;
         get_ro_match!(self, addr, [
             0xf11, 0; // mvendorid
             0xf12, 0; // marchid
@@ -111,9 +112,9 @@ impl CSRFile {
             0xb81, 0; // mpm_reserved_h
 
             0xf14, mhartid as u32; // mhartid
-            0xcc0, self.conf().lane_id as u32; // thread_id
-            0xcc1, self.conf().warp_id as u32; // warp_id
-            0xcc2, self.conf().core_id as u32; // core_id
+            0xcc0, self.conf().lane_config.lane_id as u32; // thread_id
+            0xcc1, self.conf().lane_config.warp_id as u32; // warp_id
+            0xcc2, self.conf().lane_config.core_id as u32; // core_id
             0xfc0, self.conf().num_lanes as u32; // num_threads
             0xfc1, self.conf().num_warps as u32; // num_warps
             0xfc2, self.conf().num_cores as u32; // num_cores

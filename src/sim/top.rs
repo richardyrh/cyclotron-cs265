@@ -5,7 +5,7 @@ use crate::base::behavior::*;
 use crate::base::component::IsComponent;
 use crate::muon::core_cytron::MuonCoreCytron;
 use crate::muon::config::MuonConfig;
-use crate::sim::elf::ElfBackedMem;
+use crate::sim::elf::{ElfBackedMem, ElfBackedMemConfig};
 
 #[derive(Default, Clone)]
 pub struct CyclotronTopConfig {
@@ -17,38 +17,25 @@ pub struct CyclotronTopConfig {
 pub struct CyclotronTop {
     pub imem: ElfBackedMem,
     pub muon: MuonCoreCytron,
-    pub config: Parameters<CyclotronTopConfig>,
 
     pub timeout: u64
 }
 
 impl CyclotronTop {
-    pub fn new(config: CyclotronTopConfig) -> CyclotronTop {
-        let perfect_imem = ElfBackedMem::default();
-
+    pub fn new(config: &CyclotronTopConfig) -> CyclotronTop {
         let mut me = CyclotronTop {
-            imem: perfect_imem,
-            muon: Default::default(),
-            config: Default::default(),
+            imem: ElfBackedMem::new(&ElfBackedMemConfig {
+                path: config.elf_path.clone(),
+            }),
+            muon: MuonCoreCytron::new(&config.muon_config),
             timeout: 1000
         };
-        me.muon = MuonCoreCytron::new(&config.muon_config.clone());
+        
+        me.muon.init_conf(Arc::new(config.muon_config));
 
         me
     }
 }
-//
-// impl Parameterizable<CyclotronTopConfig> for CyclotronTop<'_> {
-//     fn conf(&self) -> &CyclotronTopConfig {
-//         self.config.c.get().unwrap()
-//     }
-//
-//     fn init_conf(&mut self, c: CyclotronTopConfig) {
-//         self.muon.init_conf(c.muon_config.clone());
-//         self.imem.load_path(Path::new(&c.elf_path)).expect("elf not found");
-//         self.config.c.set(c).map_err(|_| "").unwrap();
-//     }
-// }
 
 impl ComponentBehaviors for CyclotronTop {
     fn tick_one(&mut self) {

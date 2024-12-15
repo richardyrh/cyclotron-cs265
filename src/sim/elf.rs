@@ -4,7 +4,6 @@ use goblin::elf::Elf;
 use crate::base::behavior::*;
 use crate::base::component::{component, ComponentBase, IsComponent};
 use crate::base::mem::HasMemory;
-use crate::sim::top::CyclotronTop;
 
 #[derive(Default)]
 pub struct ElfBackedMemState {
@@ -13,13 +12,21 @@ pub struct ElfBackedMemState {
 
 #[derive(Default)]
 pub struct ElfBackedMem {
-    pub base: ComponentBase<ElfBackedMemState, ()>,
+    pub base: ComponentBase<ElfBackedMemState, ElfBackedMemConfig>,
 }
 
-component!(ElfBackedMem, ElfBackedMemState, (),
-    fn new(_: &()) -> ElfBackedMem { Default::default() }
-);
+#[derive(Default)]
+pub struct ElfBackedMemConfig {
+    pub path: String,
+}
 
+component!(ElfBackedMem, ElfBackedMemState, ElfBackedMemConfig,
+    fn new(config: &ElfBackedMemConfig) -> ElfBackedMem {
+        let mut me = ElfBackedMem::default();
+        me.load_path(config.path.as_ref()).unwrap();
+        me
+    }
+);
 
 impl ComponentBehaviors for ElfBackedMem {
     fn tick_one(&mut self) {}
