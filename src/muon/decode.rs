@@ -1,6 +1,7 @@
 extern crate num;
 
 use std::fmt::Formatter;
+use std::sync::Arc;
 use crate::base::behavior::*;
 use crate::base::component::{component, ComponentBase, IsComponent};
 use crate::utils::*;
@@ -64,7 +65,7 @@ impl ComponentBehaviors for RegFile {
 }
 
 component!(RegFile, RegFileState, (),
-    fn new(_: &()) -> RegFile {
+    fn new(_: Arc<()>) -> RegFile {
         RegFile::default()
     }
 );

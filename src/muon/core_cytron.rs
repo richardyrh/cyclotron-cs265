@@ -1,40 +1,61 @@
 use std::sync::Arc;
+use log::info;
 use crate::base::{behavior::*, component::*, port::*};
 use crate::base::behavior::Parameterizable;
 use crate::base::mem::{MemRequest, MemResponse};
-use crate::muon::config::MuonConfig;
+use crate::muon::config::{LaneConfig, MuonConfig};
 use crate::muon::scheduler::Scheduler;
 use crate::muon::warp::Warp;
+use crate::utils::fill;
 
 #[derive(Default)]
-pub struct MuonState {
-    pub(crate) core_id: usize
-}
+pub struct MuonState {}
 
 #[derive(Default)]
 pub struct MuonCoreCytron {
     pub base: ComponentBase<MuonState, MuonConfig>,
     pub scheduler: Scheduler,
     pub warps: Vec<Warp>,
-    pub imem_req: Port<OutputPort, MemRequest>,
-    pub imem_resp: Port<InputPort, MemResponse>,
+    pub imem_req: Vec<Port<OutputPort, MemRequest>>,
+    pub imem_resp: Vec<Port<InputPort, MemResponse>>,
 }
 
 component!(MuonCoreCytron, MuonState, MuonConfig,
-    fn new(config: &MuonConfig) -> MuonCoreCytron {
+    fn new(config: Arc<MuonConfig>) -> MuonCoreCytron {
+        let num_warps = config.num_warps;
         let mut me = MuonCoreCytron {
             base: Default::default(),
-            scheduler: Default::default(),
-            warps: vec![],
-            imem_req: Default::default(),
-            imem_resp: Default::default(),
+            scheduler: Scheduler::new(config.clone()),
+            warps: (0..num_warps).map(|warp_id| Warp::new(Arc::new(MuonConfig {
+                lane_config: LaneConfig {
+                    warp_id,
+                    ..config.lane_config
+                },
+                ..*config
+            }))).collect(),
+            imem_req: fill!(Port::new(), num_warps),
+            imem_resp: fill!(Port::new(), num_warps),
         };
 
-        let num_warps = config.num_warps;
-        me.warps = (0..num_warps).map(|_| Warp::new(config)).collect();
-        me.scheduler = Scheduler::new(config);
+        let sched_out = &mut me.scheduler.schedule.iter_mut().collect();
+        let sched_in = &mut me.warps.iter_mut().map(|w| &mut w.schedule).collect();
+        link_vec(sched_out, sched_in);
 
-        me.init_conf(Arc::new(*config));
+        let sched_wb_in = &mut me.scheduler.schedule_wb.iter_mut().collect();
+        let sched_wb_out = &mut me.warps.iter_mut().map(|w| &mut w.schedule_wb).collect();
+        link_vec(sched_wb_out, sched_wb_in);
+
+        let imem_req_warps = &mut me.warps.iter_mut().map(|w| &mut w.imem_req).collect();
+        let imem_req_core = &mut me.imem_req.iter_mut().collect();
+        link_vec(imem_req_warps, imem_req_core);
+
+        let imem_resp_warps = &mut me.warps.iter_mut().map(|w| &mut w.imem_resp).collect();
+        let imem_resp_core = &mut me.imem_resp.iter_mut().collect();
+        link_vec(imem_resp_warps, imem_resp_core);
+
+        info!("muon core {} instantiated!", config.lane_config.core_id);
+
+        me.init_conf(config.clone());
         me
     }
 
@@ -47,16 +68,8 @@ impl ComponentBehaviors for MuonCoreCytron {
     fn tick_one(&mut self) {
         self.scheduler.tick_one();
 
-        self.scheduler.schedule.iter_mut()
-            .zip(self.warps.iter_mut().map(|w| &mut w.schedule).collect::<Vec<_>>())
-            .for_each(|(o, i)| link(o, i));
-
         self.warps.iter_mut().for_each(ComponentBehaviors::tick_one);
-        
-        self.scheduler.schedule_wb.iter_mut()
-            .zip(self.warps.iter_mut().map(|w| &mut w.schedule_wb).collect::<Vec<_>>())
-            .for_each(|(i, o)| link(o, i));
-            
+
         self.base.cycle += 1;
     }
 

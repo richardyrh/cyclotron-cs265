@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use log::{debug, info};
+use log::{info};
 use num_traits::FromPrimitive;
 use crate::base::behavior::*;
 use crate::base::component::{component, ComponentBase, IsComponent};
@@ -81,7 +81,7 @@ impl ComponentBehaviors for ExecuteUnit {
 }
 
 component!(ExecuteUnit, ExecuteUnitState, MuonConfig,
-    fn new(_: &MuonConfig) -> Self {
+    fn new(_: Arc<MuonConfig>) -> Self {
         Default::default()
     }
 );

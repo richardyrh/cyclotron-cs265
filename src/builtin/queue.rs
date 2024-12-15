@@ -1,5 +1,6 @@
+use std::sync::Arc;
 use crate::base::behavior::*;
-use crate::base::component::{component, component_inner, ComponentBase, IsComponent};
+use crate::base::component::{component_inner, ComponentBase, IsComponent};
 
 pub struct QueueState<T, const N: usize> {
     pub storage: Vec<T>,
@@ -32,7 +33,7 @@ impl<T: Default, const N: usize> ComponentBehaviors for Queue<T, N> {
 impl<T: Default, const N: usize> IsComponent for Queue<T, N> {
     component_inner!(QueueState<T, N>, ());
 
-    fn new(_: &Self::ConfigType) -> Self {
+    fn new(_: Arc<()>) -> Self {
         Queue::<T, N>::default()
     }
 }

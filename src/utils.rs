@@ -1,3 +1,6 @@
+#![allow(unused)]
+#![allow(unused_macros)]
+
 use num_traits::{PrimInt, Unsigned};
 
 pub trait BitSlice {
@@ -74,3 +77,10 @@ macro_rules! zip2d {
     };
 }
 pub(crate) use zip2d;
+
+macro_rules! fill {
+    ($value:expr, $n:expr) => {
+        std::iter::repeat_with(|| $value).take($n).collect::<Vec<_>>()
+    };
+}
+pub(crate) use fill;

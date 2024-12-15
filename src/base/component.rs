@@ -1,12 +1,11 @@
-use std::convert::Into;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use crate::base::behavior::*;
 
 pub struct ComponentBase<T, C> {
     pub cycle: u64,
     pub frequency: u64,
     pub state: T,
-    pub config: Parameters<Arc<C>>,
+    pub config: OnceLock<Arc<C>>,
 }
 
 impl<T: Default, C: Default> Default for ComponentBase<T, C> {
@@ -15,7 +14,7 @@ impl<T: Default, C: Default> Default for ComponentBase<T, C> {
             cycle: 0,
             frequency: 500 << 20,
             state: T::default(),
-            config: Parameters::default(),
+            config: OnceLock::new(),
         }
     }
 }
@@ -24,7 +23,7 @@ pub trait IsComponent: ComponentBehaviors {
     type StateType;
     type ConfigType;
 
-    fn new(config: &Self::ConfigType) -> Self;
+    fn new(config: Arc<Self::ConfigType>) -> Self;
 
     fn base(&mut self) -> &mut ComponentBase<Self::StateType, Self::ConfigType>;
 
@@ -40,7 +39,6 @@ pub trait IsComponent: ComponentBehaviors {
 
     /// get all children, parameterizable or not
     fn get_children(&mut self) -> Vec<&mut dyn ComponentBehaviors> {
-        // Vec::<&mut dyn ComponentBehaviors>::
         vec![]
     }
 
@@ -48,21 +46,17 @@ pub trait IsComponent: ComponentBehaviors {
     fn get_param_children(&mut self) -> Vec<&mut dyn Parameterizable<ConfigType=Self::ConfigType>> {
         vec![]
     }
-
 }
 
 impl<X> Parameterizable for X where X: IsComponent {
     type ConfigType = X::ConfigType;
 
     fn conf(&self) -> &Self::ConfigType {
-        self.base_ref().config.c.get().unwrap()
+        self.base_ref().config.get().expect("config not found, was `init_conf` called in `new`?")
     }
 
     fn init_conf(&mut self, conf: Arc<Self::ConfigType>) {
-        self.get_param_children().iter_mut().for_each(|c| {
-            c.init_conf(conf.clone());
-        });
-        self.base().config.c.set(conf.clone()).map_err(|_| "config already set").unwrap();
+        self.base().config.set(conf.clone()).map_err(|_| "config already set").unwrap();
     }
 }
 

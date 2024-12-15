@@ -1,3 +1,5 @@
+use std::sync::Arc;
+use log::info;
 use crate::base::behavior::*;
 use crate::base::component::{component, ComponentBase, IsComponent};
 use crate::base::port::{InputPort, OutputPort, Port};
@@ -11,7 +13,7 @@ pub struct SchedulerState {
     active_warps: u32,
     thread_masks: Vec<u32>,
     pc: Vec<u32>,
-    ipdom_stack: Vec<u32>,
+    _ipdom_stack: Vec<u32>,
     end_stall: Vec<bool>,
 }
 
@@ -47,7 +49,7 @@ impl ComponentBehaviors for Scheduler {
                         SFUType::TMC => {
                             let tmask = wb.insts[0].rs1;
                             self.base.state.thread_masks[wid] = tmask;
-                            if (tmask == 0) {
+                            if tmask == 0 {
                                 self.base.state.active_warps.mut_bit(wid, false);
                             }
                         }
@@ -63,6 +65,7 @@ impl ComponentBehaviors for Scheduler {
                         SFUType::SPLIT => {
                             let then_mask: Vec<_> = wb.insts.iter().map(|d| d.rs1.bit(0)).collect();
                             let else_mask: Vec<_> = then_mask.iter().map(|d| !d).collect();
+                            let _sup = else_mask;
                             todo!()
                         }
                         SFUType::JOIN => {
@@ -106,29 +109,15 @@ impl ComponentBehaviors for Scheduler {
 }
 
 component!(Scheduler, SchedulerState, MuonConfig,
-    fn new(config: &MuonConfig) -> Scheduler {
+    fn new(config: Arc<MuonConfig>) -> Scheduler {
+        info!("scheduler instantiated!");
         let num_warps = config.num_warps;
-        Scheduler {
+        let mut me = Scheduler {
             base: Default::default(),
             schedule: vec![Port::new(); num_warps],
             schedule_wb: vec![Port::new(); num_warps],
-        }
+        };
+        me.init_conf(config);
+        me
     }
 );
-
-impl Scheduler {
-
-    pub fn tmc(&mut self, wid: usize, tmask: u32) {
-    }
-
-    pub fn wspawn(&mut self, wid: usize, curr_pc: u32, num_warps: usize) {
-    }
-
-    pub fn split(&mut self, wid: usize, then_mask: u32) -> u32 {
-        todo!();
-    }
-
-    pub fn join(&mut self, wid: usize, divergent: bool) {
-        todo!();
-    }
-}

@@ -184,6 +184,7 @@ impl ISA {
         x
     }
 
+    #[allow(unused_variables)]
     pub fn get_insts() -> Vec<Box<InstGroup>> {
         let sfu_inst_imps: Vec<InstImp<0>>  = vec![
             // sets thread mask to rs1[NT-1:0]

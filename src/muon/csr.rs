@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{RwLock, RwLockWriteGuard};
+use std::sync::{Arc, RwLock};
 use crate::base::behavior::*;
 use crate::base::component::*;
 use crate::muon::config::MuonConfig;
@@ -33,9 +33,10 @@ impl ComponentBehaviors for CSRFile {
 }
 
 component!(CSRFile, CSRState, MuonConfig,
-    fn new(_config: &MuonConfig) -> Self {
+    fn new(config: Arc<MuonConfig>) -> Self {
         let mut csr = CSRFile::default();
         csr.lock = RwLock::new(());
+        csr.init_conf(config);
         csr
     }
 );
@@ -137,6 +138,7 @@ impl CSRFile {
 
     // these are writable by user with an initial value
     fn csr_rw_ref_user(&mut self, addr: u32) -> Option<&mut u32> {
+        let _lock = self.lock.write().expect("lock poisoned");
         get_ref_rw_match!(self, addr, [
             0xacc, 0; // cisc accelerator
             0x001, 0; // vx_fflags
@@ -146,16 +148,15 @@ impl CSRFile {
     }
 
     pub fn user_access(&mut self, addr: u32, value: u32, op: CSROp) -> u32 {
-        if let Some(&mut mut w) = self.csr_rw_ref_user(addr) { // writable
-            let _lock = self.lock.write().expect("lock poisoned");
+        if let Some(w) = self.csr_rw_ref_user(addr) { // writable
             let old_value = w.clone();
             match op {
-                CSROp::CLEAR => { w &= value }
-                CSROp::SET => { w = value }
-                CSROp::WRITE => { w |= value }
+                CSROp::CLEAR => { *w &= value }
+                CSROp::SET => { *w = value }
+                CSROp::WRITE => { *w |= value }
             }
             old_value
-        } else {
+        } else { // read-only
             self.csr_rw_ref_emu(addr).map(|x| *x).or(self.csr_ro_ref(addr))
                 .expect(&format!("reading nonexistent csr {}", addr))
         }

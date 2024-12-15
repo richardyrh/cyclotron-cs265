@@ -21,7 +21,7 @@ pub struct ElfBackedMemConfig {
 }
 
 component!(ElfBackedMem, ElfBackedMemState, ElfBackedMemConfig,
-    fn new(config: &ElfBackedMemConfig) -> ElfBackedMem {
+    fn new(config: Arc<ElfBackedMemConfig>) -> ElfBackedMem {
         let mut me = ElfBackedMem::default();
         me.load_path(config.path.as_ref()).unwrap();
         me
@@ -80,8 +80,6 @@ impl ElfBackedMem {
                 }
             }
         }
-
-        print!("{:?}", self.base.state.sections.keys());
 
         Ok(())
     }

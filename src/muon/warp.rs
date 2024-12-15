@@ -1,4 +1,7 @@
+use std::sync::Arc;
+use log::info;
 use crate::base::behavior::*;
+use crate::base::behavior::Parameterizable;
 use crate::base::component::{component, ComponentBase, IsComponent};
 use crate::base::mem::{MemRequest, MemResponse};
 use crate::base::port::{InputPort, OutputPort, Port};
@@ -144,33 +147,34 @@ component!(Warp, WarpState, MuonConfig,
         todo!()
     }
 
-    fn new(config: &MuonConfig) -> Warp {
+    fn new(config: Arc<MuonConfig>) -> Warp {
         let num_lanes = config.num_lanes;
-        Warp {
+        info!("warp {} instantiated!", config.lane_config.warp_id);
+        let mut me = Warp {
             base: ComponentBase::default(),
             lanes: (0..num_lanes).map(|lane_id| {
-                let lane_config = MuonConfig {
-                    num_lanes: config.num_lanes,
-                    num_warps: config.num_warps,
-                    num_cores: config.num_cores,
+                let lane_config = Arc::new(MuonConfig {
                     lane_config: LaneConfig {
                         lane_id,
                         ..config.lane_config
-                    }
-                };
+                    },
+                    ..*config
+                });
                 Lane {
-                    reg_file: RegFile::new(&()),
-                    csr_file: CSRFile::new(&lane_config),
+                    reg_file: RegFile::new(Arc::new(())),
+                    csr_file: CSRFile::new(lane_config.clone()),
                     decode_unit: DecodeUnit,
-                    execute_unit: ExecuteUnit::new(&lane_config),
+                    execute_unit: ExecuteUnit::new(lane_config.clone()),
                 }
             }).collect(),
-            fetch_queue: Queue::new(&()),
+            fetch_queue: Queue::new(Arc::new(())),
             schedule: Port::new(),
             imem_req: Port::new(),
             imem_resp: Port::new(),
             schedule_wb: Port::new(),
-        }
+        };
+        me.init_conf(config);
+        me
     }
 );
 
