@@ -64,26 +64,26 @@ impl ComponentBehaviors for Warp {
         { self.base().cycle += 1; }
         // fetch
         if let Some(schedule) = self.schedule.get() {
-            if schedule.end_stall || !self.base.state.stalled {
-                if !self.imem_req.blocked() && self.fetch_queue.try_enq(&(&schedule).into()) {
-                    assert!(self.imem_req.read::<8>(schedule.pc as usize));
-                }
+            info!("warp {} fetch=0x{:08x}", self.conf().lane_config.warp_id, schedule.pc);
+            if !self.imem_req.blocked() && self.fetch_queue.try_enq(&(&schedule).into()) {
+                assert!(self.imem_req.read::<8>(schedule.pc as usize));
             }
         }
         // decode, execute, writeback
         if let Some(resp) = self.imem_resp.get() {
             let metadata = self.fetch_queue.try_deq().expect("fetch queue empty");
 
+            info!("warp {} decode=0x{:08x} end_stall={}", self.conf().lane_config.warp_id, metadata.pc, metadata.end_stall);
             self.base.state.stalled &= !metadata.end_stall;
             if self.base.state.stalled {
-                println!("stalling pc 0x{:08x}", metadata.pc);
+                info!("warp stalled");
                 return;
             }
 
             // decode, execute, write back to register file
             let inst_data: [u8; 8] = (*(resp.data.as_ref().unwrap().clone()))
                 .try_into().expect("imem response is not 8 bytes");
-            println!("cycle={}, pc={:08x}", self.base.cycle, metadata.pc);
+            info!("cycle={}, pc={:08x}", self.base.cycle, metadata.pc);
             let writebacks: Vec<_> = (0..self.conf().num_lanes).map(|lane_id| {
                 self.lanes[lane_id].csr_file.emu_access(0xcc3, metadata.active_warps);
                 self.lanes[lane_id].csr_file.emu_access(0xcc4, metadata.mask);
@@ -97,6 +97,8 @@ impl ComponentBehaviors for Warp {
                 let writeback = self.lanes[lane_id].execute_unit.execute(decoded.clone());
 
                 let rf_mut = &mut self.lanes[lane_id].reg_file;
+
+                // TODO: this will get clobbered for CSR insts, counts may be inaccurate
                 rf_mut.write_gpr(writeback.rd_addr, writeback.rd_data);
                 writeback
             }).collect();
@@ -115,10 +117,11 @@ impl ComponentBehaviors for Warp {
                 }
             }).or(writebacks[0].csr_type.map(|csr| {
                 writebacks.iter().enumerate().for_each(|(lane_id, writeback)| {
-                    if [0xcc3, 0xcc4].contains(&writeback.rd_data) {
+                    let csr_mut = &mut self.lanes[lane_id].csr_file;
+                    let csrr = (csr == CSRType::RS) && writeback.inst.rs1 == 0;
+                    if [0xcc3, 0xcc4].contains(&writeback.rd_data) && !csrr {
                         panic!("unimplemented mask write using csr");
                     }
-                    let csr_mut = &mut self.lanes[lane_id].csr_file;
                     let old_val = csr_mut.user_access(writeback.rd_data, match csr {
                         CSRType::RW | CSRType::RS | CSRType::RC => {
                             writeback.inst.rs1
@@ -129,6 +132,7 @@ impl ComponentBehaviors for Warp {
                     }, csr);
                     let rf_mut = &mut self.lanes[lane_id].reg_file;
                     rf_mut.write_gpr(writeback.rd_addr, old_val);
+                    info!("csr read value {}", old_val);
                 });
                 ScheduleWriteback {
                     insts: writebacks.iter().map(|w| w.inst).collect(),

@@ -5,9 +5,10 @@ use crate::base::behavior::*;
 use crate::base::component::{component, ComponentBase, IsComponent};
 use crate::base::mem::HasMemory;
 use crate::muon::config::MuonConfig;
-use crate::muon::decode::DecodedInst;
+use crate::muon::decode::{sign_ext, DecodedInst};
 use crate::muon::isa::{CSRType, InstAction, SFUType, ISA};
 use crate::sim::top::GMEM;
+use crate::utils::BitSlice;
 
 pub struct Writeback {
     pub inst: DecodedInst,
@@ -61,13 +62,14 @@ component!(ExecuteUnit, ExecuteUnitState, MuonConfig,
 impl ExecuteUnit {
     pub fn execute(&mut self, decoded: DecodedInst) -> Writeback {
         let isa = ISA::get_insts();
-        info!("executing decoded instruction {}", decoded);
-        let (alu_result, actions) = isa.iter().map(|inst_group| {
+        let (op, alu_result, actions) = isa.iter().map(|inst_group| {
             inst_group.execute(&decoded)
         }).fold(None, |prev, curr| {
-            assert!(prev.and(curr).is_none(), "multiple viable implementations for {}", &decoded);
+            assert!(prev.clone().and(curr.clone()).is_none(), "multiple viable implementations for {}", &decoded);
             prev.or(curr)
         }).expect(&format!("unimplemented instruction {}", &decoded));
+
+        info!("execute pc 0x{:08x} {} {}", decoded.pc, op, decoded);
 
         let mut writeback = Writeback {
             inst: decoded,
@@ -81,14 +83,37 @@ impl ExecuteUnit {
             let load_data_bytes = GMEM.write().expect("lock poisoned").read::<4>(
                 alu_result as usize).expect("store failed");
             writeback.rd_addr = decoded.rd;
-            writeback.rd_data = u32::from_le_bytes(*load_data_bytes);
+
+            let raw_load = u32::from_le_bytes(*load_data_bytes);
+            let sext = writeback.inst.f3.bit(2);
+            let opt_sext = |f: fn(u32) -> i32, x: u32| { if sext { f(x) as u32 } else { x } };
+            let masked_load = match writeback.inst.f3 & 3 {
+                0 => opt_sext(sign_ext::<8>, raw_load.sel(7, 0)),
+                1 => opt_sext(sign_ext::<16>, raw_load.sel(15, 0)),
+                2 => raw_load,
+                _ => panic!("unimplemented load type"),
+            };
+            writeback.rd_data = masked_load;
         }
         if (actions & InstAction::MEM_STORE) > 0 {
-            GMEM.write().expect("lock poisoned").write::<4>(
-                alu_result as usize, Arc::new(decoded.rs2.to_le_bytes())).expect("store failed");
+            let mut gmem = GMEM.write().expect("lock poisoned");
+            let addr = alu_result as usize;
+            let data = decoded.rs2.to_le_bytes();
+            match writeback.inst.f3 & 3 {
+                0 => {
+                    gmem.write::<1>(addr, Arc::new(data[0..1].try_into().unwrap()))
+                },
+                1 => {
+                    gmem.write::<2>(addr, Arc::new(data[0..2].try_into().unwrap()))
+                },
+                2 => {
+                    gmem.write::<4>(addr, Arc::new(data[0..4].try_into().unwrap()))
+                },
+                _ => panic!("unimplemented store type"),
+            }.expect("store failed");
         }
         if (actions & InstAction::SET_REL_PC) > 0 {
-            writeback.set_pc = (alu_result != 0).then(|| decoded.pc + alu_result);
+            writeback.set_pc = (alu_result != 0).then(|| decoded.pc.wrapping_add(alu_result));
         }
         if (actions & InstAction::SET_ABS_PC) > 0 {
             writeback.set_pc = Some(alu_result);
@@ -107,6 +132,9 @@ impl ExecuteUnit {
             writeback.csr_type = Some(CSRType::from_u32(alu_result).unwrap());
             writeback.rd_addr = decoded.rd;
             writeback.rd_data = decoded.imm32 as u32;
+        }
+        if writeback.rd_addr > 0 {
+            info!("normal writeback to x{} value 0x{:08x}", writeback.rd_addr, writeback.rd_data);
         }
 
         writeback

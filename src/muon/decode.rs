@@ -26,7 +26,8 @@ pub struct DecodedInst {
 impl std::fmt::Display for DecodedInst {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let hex_string: String = self.raw.iter().rev().map(|byte| format!("{:02X}", byte)).collect::<Vec<_>>().join("");
-        write!(f, "inst 0x{} [ op: 0x{:x}, f3: {}, f7: {} ]", hex_string, self.opcode, self.f3, self.f7)
+        write!(f, "inst 0x{} [ op: 0x{:x}, f3: {}, f7: {}, rs1: 0x{:08x}, rs2: 0x{:08x} ]",
+            hex_string, self.opcode, self.f3, self.f7, self.rs1, self.rs2)
     }
 }
 

@@ -37,7 +37,7 @@ impl CyclotronTop {
         let me = CyclotronTop {
             imem: imem.clone(),
             muon: MuonCoreCytron::new(Arc::new(config.muon_config)),
-            timeout: 1000
+            timeout: config.timeout,
         };
         GMEM.write().expect("gmem poisoned").set_fallthrough(imem.clone());
 

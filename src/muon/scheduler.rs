@@ -35,7 +35,6 @@ pub struct Scheduler {
 
 impl ComponentBehaviors for Scheduler {
     fn tick_one(&mut self) {
-        let num_warps = self.conf().num_warps;
 
         self.schedule_wb.iter_mut().enumerate().for_each(|(wid, port)| {
             if let Some(wb) = port.get() {
@@ -45,22 +44,27 @@ impl ComponentBehaviors for Scheduler {
                 }
                 if let Some(sfu) = wb.sfu {
                     // for warp-wide operations, we take lane 0 to be the truth
+                    self.base.state.pc[wid] = wb.insts[0].pc + 8; // flush
+                    info!("resetting next pc to 0x{:08x}", wb.insts[0].pc + 8);
                     match sfu {
                         SFUType::TMC => {
                             let tmask = wb.insts[0].rs1;
+                            info!("tmc value {}", tmask);
                             self.base.state.thread_masks[wid] = tmask;
                             if tmask == 0 {
                                 self.base.state.active_warps.mut_bit(wid, false);
                             }
                         }
                         SFUType::WSPAWN => {
-                            let start_pc = wb.insts[0].pc + 8;
-                            for i in 0..num_warps {
+                            let start_pc = wb.insts[0].rs2;
+                            info!("wspawn {} warps @pc={:08x}", wb.insts[0].rs1, start_pc);
+                            for i in 0..wb.insts[0].rs1 as usize {
                                 if !self.base.state.active_warps.bit(i) {
                                     self.base.state.pc[i] = start_pc;
                                 }
-                                self.base.state.active_warps.mut_bit(wid, true);
+                                self.base.state.active_warps.mut_bit(i, true);
                             }
+                            info!("new active warps: {:b}", self.base.state.active_warps);
                         }
                         SFUType::SPLIT => {
                             let then_mask: Vec<_> = wb.insts.iter().map(|d| d.rs1.bit(0)).collect();

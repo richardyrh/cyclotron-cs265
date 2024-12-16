@@ -1,6 +1,7 @@
 #![allow(unused)]
 #![allow(unused_macros)]
 
+use log::info;
 use num_traits::{PrimInt, Unsigned};
 
 pub trait BitSlice {
@@ -38,7 +39,8 @@ impl<T: PrimInt + Unsigned + TryFrom<u64>> BitSlice for T {
 
     fn mut_bit(&mut self, idx: usize, to: bool) {
         let self64: u64 = self.to_u64().unwrap();
-        *self = (self64 & (!(1u64 << idx)) | ((to as u64) << idx)).try_into().map_err(|_| "").unwrap()
+        *self = (self64 & (!(1u64 << idx)) | ((to as u64) << idx)).try_into().map_err(|_| "").unwrap();
+        info!("mut idx {} to {}", idx, self.to_u64().unwrap());
     }
 }
 

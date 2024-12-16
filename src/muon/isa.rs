@@ -64,7 +64,7 @@ pub enum SFUType {
     PRED   = 5,
 }
 
-#[derive(FromPrimitive, Clone, Copy)]
+#[derive(FromPrimitive, Clone, Copy, PartialEq)]
 pub enum CSRType {
     RW  = 1,
     RS  = 2,
@@ -115,7 +115,7 @@ impl InstImp<0> {
     pub fn nul_f3(name: &str, opcode: Opcode, f3: u8, actions: u32, op: fn() -> u32) -> InstImp<0> {
         InstImp::<0> { name: name.to_string(), opcode, f3: Some(f3), f7: None, actions, op: Box::new(op) }
     }
-    
+
     pub fn nul_f3_f7(name: &str, opcode: Opcode, f3: u8, f7: u8, actions: u32, op: fn() -> u32) -> InstImp<0> {
         InstImp::<0> { name: name.to_string(), opcode, f3: Some(f3), f7: Some(f7), actions, op: Box::new(op) }
     }
@@ -151,7 +151,7 @@ pub struct InstGroupVariant<const N: usize> {
 
 impl<const N: usize> InstGroupVariant<N> {
     // returns Some((alu result, actions)) if opcode, f3 and f7 matches
-    fn execute(&self, req: &DecodedInst) -> Option<(u32, u32)> {
+    fn execute(&self, req: &DecodedInst) -> Option<(String, u32, u32)> {
         let operands = (self.get_operands)(&req);
 
         self.insts.iter().map(|inst| {
@@ -165,7 +165,7 @@ impl<const N: usize> InstGroupVariant<N> {
                 InstImp { opcode, f3: _, f7: _, op, .. } => {
                     (req.opcode == opcode.into()).then(|| op.run(operands))
                 },
-            }.map(|alu| (alu, inst.actions))
+            }.map(|alu| (inst.name.clone(), alu, inst.actions))
         }).fold(None, Option::or)
     }
 }
@@ -178,7 +178,7 @@ pub enum InstGroup {
 }
 
 impl InstGroup {
-    pub fn execute(&self, req: &DecodedInst) -> Option<(u32, u32)> {
+    pub fn execute(&self, req: &DecodedInst) -> Option<(String, u32, u32)> {
         match self {
             InstGroup::Nullary(x) => { x.execute(req) }
             InstGroup::Unary(x) => { x.execute(req) }

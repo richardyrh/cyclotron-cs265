@@ -1,19 +1,17 @@
+use std::collections::VecDeque;
 use std::sync::Arc;
-use log::info;
 use crate::base::behavior::*;
 use crate::base::component::{component_inner, ComponentBase, IsComponent};
 
 pub struct QueueState<T, const N: usize> {
-    pub storage: Vec<T>,
-    size: usize,
+    pub storage: VecDeque<T>,
     max_size: usize,
 }
 
 impl<T: Default, const N: usize> Default for QueueState<T, N> {
     fn default() -> Self {
         Self {
-            storage: (0..N).map(|_| T::default()).collect(), // no need for Copy trait
-            size: 0,
+            storage: VecDeque::new(),
             max_size: N,
         }
     }
@@ -27,7 +25,7 @@ pub struct Queue<T, const N: usize> where T: Default {
 impl<T: Default, const N: usize> ComponentBehaviors for Queue<T, N> {
     fn tick_one(&mut self) {}
     fn reset(&mut self) {
-        self.state().size = 0;
+        self.state().storage.clear();
     }
 }
 
@@ -42,25 +40,17 @@ impl<T: Default, const N: usize> IsComponent for Queue<T, N> {
 // TODO: add locks and stuff
 impl<T: Default + Clone, const N: usize> Queue<T, N> {
     pub fn try_enq(&mut self, data: &T) -> bool {
-        info!("enqueue data");
-        let size = self.state().size;
+        let size = self.state().storage.len();
         let max_size = self.state().max_size;
         if size >= max_size {
             return false;
         }
-        info!("enqueue data success");
-        self.state().storage[size] = data.clone();
-        self.state().size += 1;
+        self.state().storage.push_back(data.clone());
         true
     }
 
     pub fn try_deq(&mut self) -> Option<T> where T: Clone {
-        info!("dequeue data");
-        let size = self.state().size;
-        (size > 0).then(|| {
-            self.state().size -= 1;
-            self.state().storage[size].clone()
-        })
+        self.state().storage.pop_front()
     }
 
     pub fn resize(&mut self, size: usize) {

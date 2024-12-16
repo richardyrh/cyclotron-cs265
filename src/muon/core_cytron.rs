@@ -68,7 +68,8 @@ impl ComponentBehaviors for MuonCoreCytron {
     fn tick_one(&mut self) {
         self.scheduler.tick_one();
         if let Some(sched) = self.scheduler.schedule[0].peek() {
-            info!("warp 0 schedule={}", sched.pc);
+            info!("warp 0 schedule=0x{:08x}", sched.pc);
+            assert_eq!(self.warps[0].schedule.peek().unwrap().pc, sched.pc);
         }
 
         self.warps.iter_mut().for_each(ComponentBehaviors::tick_one);

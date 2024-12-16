@@ -10,8 +10,8 @@ pub fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
     let mut cytron_top = CyclotronTop::new(Arc::new(CyclotronTopConfig {
-        timeout: 1000,
-        elf_path: "hello.elf".into(),
+        timeout: 50000,
+        elf_path: "test/gemm.elf".into(),
         muon_config: MuonConfig {
             num_lanes: 4,
             num_warps: 4,
