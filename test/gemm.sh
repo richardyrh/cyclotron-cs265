@@ -1,0 +1,2 @@
+/nscratch/yrh/vortex-install/llvm-muon/bin/clang -Xclang -target-feature -Xclang +vortex -mllvm -vortex-branch-divergence=0 --target=riscv32-unknown-elf -mabi=ilp32f -march=rv32imaf --sysroot=$RISCV_TOOLCHAIN_PATH/riscv32-unknown-elf --gcc-toolchain=$RISCV_TOOLCHAIN_PATH -O2 -fuse-ld=lld -v -fno-rtti -fno-exceptions -nostartfiles -fdata-sections -ffunction-sections  -Wl,-v,-Bstatic,-T,/scratch/yrh/vxsw/kernel/linker/vx_link32.ld,--defsym=STARTUP_ADDR=0x80000000,-z,norelro gemm.c -o gemm.elf
+/nscratch/yrh/vortex-install/llvm-muon/bin/llvm-objdump -d gemm.elf > gemm.dump

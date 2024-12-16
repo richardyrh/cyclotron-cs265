@@ -48,7 +48,7 @@ impl ComponentBehaviors for Scheduler {
                     info!("resetting next pc to 0x{:08x}", wb.insts[0].pc + 8);
                     match sfu {
                         SFUType::TMC => {
-                            let tmask = wb.insts[0].rs1;
+                            let tmask = (wb.insts[0].rs1)();
                             info!("tmc value {}", tmask);
                             self.base.state.thread_masks[wid] = tmask;
                             if tmask == 0 {
@@ -56,9 +56,9 @@ impl ComponentBehaviors for Scheduler {
                             }
                         }
                         SFUType::WSPAWN => {
-                            let start_pc = wb.insts[0].rs2;
-                            info!("wspawn {} warps @pc={:08x}", wb.insts[0].rs1, start_pc);
-                            for i in 0..wb.insts[0].rs1 as usize {
+                            let start_pc = (wb.insts[0].rs2)();
+                            info!("wspawn {} warps @pc={:08x}", (wb.insts[0].rs1)(), start_pc);
+                            for i in 0..(wb.insts[0].rs1)() as usize {
                                 if !self.base.state.active_warps.bit(i) {
                                     self.base.state.pc[i] = start_pc;
                                 }
@@ -67,7 +67,7 @@ impl ComponentBehaviors for Scheduler {
                             info!("new active warps: {:b}", self.base.state.active_warps);
                         }
                         SFUType::SPLIT => {
-                            let then_mask: Vec<_> = wb.insts.iter().map(|d| d.rs1.bit(0)).collect();
+                            let then_mask: Vec<_> = wb.insts.iter().map(|d| (d.rs1)().bit(0)).collect();
                             let else_mask: Vec<_> = then_mask.iter().map(|d| !d).collect();
                             let _sup = else_mask;
                             todo!()

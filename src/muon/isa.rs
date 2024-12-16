@@ -2,6 +2,7 @@ use log::error;
 use num_derive::FromPrimitive;
 pub use num_traits::{WrappingAdd};
 use crate::muon::decode::DecodedInst;
+use crate::muon::decode::REGS_ACCESSED;
 
 #[derive(FromPrimitive, Clone)]
 pub enum Opcode {
@@ -154,8 +155,8 @@ impl<const N: usize> InstGroupVariant<N> {
     fn execute(&self, req: &DecodedInst) -> Option<(String, u32, u32)> {
         let operands = (self.get_operands)(&req);
 
-        self.insts.iter().map(|inst| {
-            match inst {
+        for inst in self.insts.iter() {
+            let executed = match inst {
                 InstImp { opcode, f3: Some(f3), f7: Some(f7), op, .. } => {
                     (req.opcode == opcode.into() && req.f3 == *f3 && req.f7 == *f7).then(|| op.run(operands))
                 },
@@ -165,8 +166,15 @@ impl<const N: usize> InstGroupVariant<N> {
                 InstImp { opcode, f3: _, f7: _, op, .. } => {
                     (req.opcode == opcode.into()).then(|| op.run(operands))
                 },
-            }.map(|alu| (inst.name.clone(), alu, inst.actions))
-        }).fold(None, Option::or)
+            };
+            if executed.is_some() {
+                return executed.map(|alu| (inst.name.clone(), alu, inst.actions));
+            }
+        }
+        let mut stat = REGS_ACCESSED.lock().expect("");
+        stat.clear();
+        drop(stat);
+        None
     }
 }
 
@@ -250,7 +258,7 @@ impl ISA {
         ];
         let r3_insts = InstGroupVariant {
             insts: r3_inst_imps,
-            get_operands: |req| [req.rs1, req.rs2],
+            get_operands: |req| [(req.rs1)(), (req.rs2)()],
         };
 
         let r4_inst_imps: Vec<InstImp<3>> = vec![
@@ -260,7 +268,7 @@ impl ISA {
         ];
         let r4_insts = InstGroupVariant {
             insts: r4_inst_imps,
-            get_operands: |req| [req.rs1, req.rs2, req.rs3],
+            get_operands: |req| [(req.rs1)(), (req.rs2)(), (req.rs3)()],
         };
 
         let i2_inst_imps: Vec<InstImp<2>> = vec![
@@ -288,7 +296,7 @@ impl ISA {
         ];
         let i2_insts = InstGroupVariant {
             insts: i2_inst_imps,
-            get_operands: |req| [req.rs1, req.imm32 as u32],
+            get_operands: |req| [(req.rs1)(), req.imm32 as u32],
         };
 
         // does not return anything
@@ -300,7 +308,7 @@ impl ISA {
         ];
         let s_insts = InstGroupVariant {
             insts: s_inst_imps,
-            get_operands: |req| [req.rs1, req.imm24 as u32],
+            get_operands: |req| [(req.rs1)(), req.imm24 as u32],
         };
 
         // binary op returns branch offset if taken, 0 if not
@@ -314,7 +322,7 @@ impl ISA {
         ];
         let sb_insts = InstGroupVariant {
             insts: sb_inst_imps,
-            get_operands: |req| [req.rs1, req.rs2, req.imm24 as u32],
+            get_operands: |req| [(req.rs1)(), (req.rs2)(), req.imm24 as u32],
         };
 
         let pcrel_inst_imps: Vec<InstImp<2>> = vec![

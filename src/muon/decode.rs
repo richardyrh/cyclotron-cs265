@@ -1,20 +1,25 @@
 extern crate num;
 
 use std::fmt::Formatter;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use lazy_static::lazy_static;
 use crate::base::behavior::*;
 use crate::base::component::{component, ComponentBase, IsComponent};
 use crate::utils::*;
 
-#[derive(Default, Copy, Clone)]
+lazy_static! {
+    pub static ref REGS_ACCESSED: Mutex<Vec<u8>> = Mutex::new(vec![]);
+}
+
+#[derive(Clone)]
 pub struct DecodedInst {
     pub opcode: u16,
     pub rd: u8,
     pub f3: u8,
-    pub rs1: u32,
-    pub rs2: u32,
-    pub rs3: u32,
-    pub rs4: u32,
+    pub rs1: Arc<dyn Fn() -> u32>,
+    pub rs2: Arc<dyn Fn() -> u32>,
+    pub rs3: Arc<dyn Fn() -> u32>,
+    pub rs4: Arc<dyn Fn() -> u32>,
     pub f7: u8,
     pub imm32: i32,
     pub imm24: i32,
@@ -23,11 +28,31 @@ pub struct DecodedInst {
     pub raw: [u8; 8],
 }
 
+impl Default for DecodedInst {
+    fn default() -> Self {
+        DecodedInst {
+            opcode: 0,
+            rd: 0,
+            f3: 0,
+            rs1: Arc::new(|| 0u32),
+            rs2: Arc::new(|| 0u32),
+            rs3: Arc::new(|| 0u32),
+            rs4: Arc::new(|| 0u32),
+            f7: 0,
+            imm32: 0,
+            imm24: 0,
+            imm8: 0,
+            pc: 0,
+            raw: [0u8; 8],
+        }
+    }
+}
+
 impl std::fmt::Display for DecodedInst {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let hex_string: String = self.raw.iter().rev().map(|byte| format!("{:02X}", byte)).collect::<Vec<_>>().join("");
         write!(f, "inst 0x{} [ op: 0x{:x}, f3: {}, f7: {}, rs1: 0x{:08x}, rs2: 0x{:08x} ]",
-            hex_string, self.opcode, self.f3, self.f7, self.rs1, self.rs2)
+            hex_string, self.opcode, self.f3, self.f7, 0, 0)
     }
 }
 
@@ -55,7 +80,6 @@ pub struct RegFile {
     base: ComponentBase<RegFileState, ()>,
 }
 
-// TODO: implement timing behavior for the regfile
 impl ComponentBehaviors for RegFile {
     fn tick_one(&mut self) {
     }
@@ -92,6 +116,13 @@ impl RegFile {
 
 pub struct DecodeUnit;
 
+pub fn make_hook(addr: u8, data: u32) -> Arc<dyn Fn() -> u32> {
+    Arc::new(move || {
+        REGS_ACCESSED.lock().expect("").push(addr);
+        data
+    })
+}
+
 impl DecodeUnit {
     pub fn decode(&self, inst_data: [u8; 8], pc: u32, rf: &RegFile) -> DecodedInst {
         let inst = u64::from_le_bytes(inst_data);
@@ -113,10 +144,10 @@ impl DecodeUnit {
             opcode: inst.sel(8, 0) as u16,
             rd: inst.sel(16, 9) as u8,
             f3: inst.sel(19, 17) as u8,
-            rs1: rf.read_gpr(rs1_addr),
-            rs2: rf.read_gpr(rs2_addr),
-            rs3: rf.read_gpr(rs3_addr),
-            rs4: rf.read_gpr(rs4_addr),
+            rs1: make_hook(rs1_addr, rf.read_gpr(rs1_addr)),
+            rs2: make_hook(rs2_addr, rf.read_gpr(rs2_addr)),
+            rs3: make_hook(rs3_addr, rf.read_gpr(rs3_addr)),
+            rs4: make_hook(rs4_addr, rf.read_gpr(rs4_addr)),
             f7: inst.sel(58, 52) as u8,
             imm32: uimm32 as i32,
             imm24,

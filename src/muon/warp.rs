@@ -8,7 +8,7 @@ use crate::base::port::{InputPort, OutputPort, Port};
 use crate::builtin::queue::Queue;
 use crate::muon::config::{LaneConfig, MuonConfig};
 use crate::muon::csr::CSRFile;
-use crate::muon::decode::{DecodeUnit, DecodedInst, RegFile};
+use crate::muon::decode::{DecodeUnit, DecodedInst, RegFile, REGS_ACCESSED};
 use crate::muon::execute::{ExecuteUnit, Writeback};
 use crate::muon::isa::{CSRType, SFUType};
 use crate::muon::scheduler::ScheduleOut;
@@ -93,8 +93,17 @@ impl ComponentBehaviors for Warp {
                 }
 
                 let rf = &self.lanes[lane_id].reg_file;
+
+                let mut stat = REGS_ACCESSED.lock().expect("");
+                stat.clear();
+                drop(stat);
+
                 let decoded = self.lanes[lane_id].decode_unit.decode(inst_data, metadata.pc, rf);
                 let writeback = self.lanes[lane_id].execute_unit.execute(decoded.clone());
+
+                let stat = REGS_ACCESSED.lock().expect("");
+                println!("REGS_ACCESSED {:?}", stat);
+                drop(stat);
 
                 let rf_mut = &mut self.lanes[lane_id].reg_file;
 
@@ -111,20 +120,20 @@ impl ComponentBehaviors for Warp {
                 }
                 self.state().stalled = true;
                 ScheduleWriteback {
-                    insts: writebacks.iter().map(|w| w.inst).collect(),
+                    insts: writebacks.iter().map(|w| w.inst.clone()).collect(),
                     branch: Some(pc),
                     sfu: None,
                 }
             }).or(writebacks[0].csr_type.map(|csr| {
                 writebacks.iter().enumerate().for_each(|(lane_id, writeback)| {
                     let csr_mut = &mut self.lanes[lane_id].csr_file;
-                    let csrr = (csr == CSRType::RS) && writeback.inst.rs1 == 0;
+                    let csrr = (csr == CSRType::RS) && (writeback.inst.rs1)() == 0;
                     if [0xcc3, 0xcc4].contains(&writeback.rd_data) && !csrr {
                         panic!("unimplemented mask write using csr");
                     }
                     let old_val = csr_mut.user_access(writeback.rd_data, match csr {
                         CSRType::RW | CSRType::RS | CSRType::RC => {
-                            writeback.inst.rs1
+                            (writeback.inst.rs1)()
                         }
                         CSRType::RWI | CSRType::RSI | CSRType::RCI => {
                             writeback.inst.imm8 as u32
@@ -135,14 +144,14 @@ impl ComponentBehaviors for Warp {
                     info!("csr read value {}", old_val);
                 });
                 ScheduleWriteback {
-                    insts: writebacks.iter().map(|w| w.inst).collect(),
+                    insts: writebacks.iter().map(|w| w.inst.clone()).collect(),
                     branch: None,
                     sfu: None,
                 }
             })).or(writebacks[0].sfu_type.map(|sfu| {
                 self.state().stalled = true;
                 ScheduleWriteback {
-                    insts: writebacks.iter().map(|w| w.inst).collect(),
+                    insts: writebacks.iter().map(|w| w.inst.clone()).collect(),
                     branch: None,
                     sfu: Some(sfu),
                 }

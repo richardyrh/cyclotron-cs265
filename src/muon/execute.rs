@@ -62,17 +62,22 @@ component!(ExecuteUnit, ExecuteUnitState, MuonConfig,
 impl ExecuteUnit {
     pub fn execute(&mut self, decoded: DecodedInst) -> Writeback {
         let isa = ISA::get_insts();
-        let (op, alu_result, actions) = isa.iter().map(|inst_group| {
-            inst_group.execute(&decoded)
-        }).fold(None, |prev, curr| {
-            assert!(prev.clone().and(curr.clone()).is_none(), "multiple viable implementations for {}", &decoded);
-            prev.or(curr)
-        }).expect(&format!("unimplemented instruction {}", &decoded));
-
+        let mut result = None;
+        for inst_group in isa.iter() {
+            let r = inst_group.execute(&decoded);
+            if r.is_some() {
+                result = r;
+                break;
+            }
+        }
+        let op = result.clone().unwrap().0;
+        let alu_result = result.clone().unwrap().1;
+        let actions = result.unwrap().2;
+        
         info!("execute pc 0x{:08x} {} {}", decoded.pc, op, decoded);
 
         let mut writeback = Writeback {
-            inst: decoded,
+            inst: decoded.clone(),
             ..Writeback::default()
         };
         if (actions & InstAction::WRITE_REG) > 0 {
@@ -98,7 +103,7 @@ impl ExecuteUnit {
         if (actions & InstAction::MEM_STORE) > 0 {
             let mut gmem = GMEM.write().expect("lock poisoned");
             let addr = alu_result as usize;
-            let data = decoded.rs2.to_le_bytes();
+            let data = (decoded.clone().rs2)().to_le_bytes();
             match writeback.inst.f3 & 3 {
                 0 => {
                     gmem.write::<1>(addr, Arc::new(data[0..1].try_into().unwrap()))
@@ -113,7 +118,7 @@ impl ExecuteUnit {
             }.expect("store failed");
         }
         if (actions & InstAction::SET_REL_PC) > 0 {
-            writeback.set_pc = (alu_result != 0).then(|| decoded.pc.wrapping_add(alu_result));
+            writeback.set_pc = (alu_result != 0).then(|| decoded.clone().pc.wrapping_add(alu_result));
         }
         if (actions & InstAction::SET_ABS_PC) > 0 {
             writeback.set_pc = Some(alu_result);

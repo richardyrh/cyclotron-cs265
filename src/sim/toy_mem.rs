@@ -20,6 +20,9 @@ impl ToyMemory {
 impl HasMemory for ToyMemory {
     fn read<const N: usize>(&mut self, addr: usize) -> Option<Arc<[u8; N]>> {
         assert!((N % 4 == 0) && N > 0, "word sized requests only");
+        if addr > 0xfe000000usize {
+            println!("STACK READ");
+        }
         let words: Vec<_> = (addr..addr + N).step_by(4).map(|a| {
             let mut result = None;
             if !self.mem.contains_key(&a) {
@@ -40,6 +43,9 @@ impl HasMemory for ToyMemory {
     }
 
     fn write<const N: usize>(&mut self, addr: usize, data: Arc<[u8; N]>) -> Result<(), String> {
+        if addr > 0xfe000000usize {
+            println!("STACK WRITE");
+        }
         if N < 4 {
             let curr = self.mem.entry(addr & !3).or_insert(0u32);
 
@@ -51,7 +57,7 @@ impl HasMemory for ToyMemory {
                 *curr &= !(0xFF << shift);
                 *curr |= (data[i] as u32) << shift;
             }
-            
+
             Ok(())
         } else {
             assert!((N % 4 == 0) && N > 0, "word sized requests only");
