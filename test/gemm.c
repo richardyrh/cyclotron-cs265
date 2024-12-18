@@ -1,7 +1,7 @@
 #include <stdint.h>
 
 #define HW_TID(gtid) asm volatile ("csrr %0, mhartid" : "=r" (gtid))
-#define N 16
+#define N 64
 #define NUM_THREADS 16
 #define BLOCK_SIZE 16
 
@@ -32,12 +32,13 @@ void gemm() {
     uint32_t row_start = tid * thread_rows;
     uint32_t row_end = row_start + thread_rows;
 
-    // Tiling dimensions
     const uint32_t TILE_SIZE = 4;
+    const uint32_t tile_columns = N / TILE_SIZE;
+    uint32_t i_stride = NUM_THREADS >= tile_columns ? (NUM_THREADS / tile_columns) : 1;
 
     // Iterate over tiles of C
-    for (uint32_t i = row_start; i < row_end; i += TILE_SIZE) {
-        for (uint32_t j = 0; j < N; j += TILE_SIZE) {
+    for (uint32_t i = (tid / tile_columns) * TILE_SIZE; i < N; i += i_stride * TILE_SIZE) {
+        for (uint32_t j = (tid % tile_columns) * TILE_SIZE; j < N; j += NUM_THREADS * TILE_SIZE) {
             // Initialize accumulators for the 4x4 tile
             register uint32_t c00 = 0, c01 = 0, c02 = 0, c03 = 0;
             register uint32_t c10 = 0, c11 = 0, c12 = 0, c13 = 0;
