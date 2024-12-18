@@ -73,8 +73,8 @@ impl ExecuteUnit {
         let op = result.clone().unwrap().0;
         let alu_result = result.clone().unwrap().1;
         let actions = result.unwrap().2;
-        
-        info!("execute pc 0x{:08x} {} {}", decoded.pc, op, decoded);
+
+        // info!("execute pc 0x{:08x} {} {}", decoded.pc, op, decoded);
 
         let mut writeback = Writeback {
             inst: decoded.clone(),
@@ -139,7 +139,7 @@ impl ExecuteUnit {
             writeback.rd_data = decoded.imm32 as u32;
         }
         if writeback.rd_addr > 0 {
-            info!("normal writeback to x{} value 0x{:08x}", writeback.rd_addr, writeback.rd_data);
+            // info!("normal writeback to x{} value 0x{:08x}", writeback.rd_addr, writeback.rd_data);
         }
 
         writeback
