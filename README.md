@@ -137,15 +137,15 @@ Cyclotron fetches directly from a compiled ELF file, and is currently capable of
 
 We added hooks to the ALU so that all necessary register reads are logged. Checks in the global memory read and write routines are added to log accesses to memory addresses belonging to the stack. The figures below shows the amount of register accesses for context, followed by the number of bank conflicts.
 
-![output](https://hackmd.io/_uploads/HJZGmskB1g.png)
+![access](figs/access.png)
 
-![output(1)](https://hackmd.io/_uploads/Hy_sQskSkg.png)
+![conflict](figs/conflict.png)
 
 The number of register accesess was reduced by under 1% when introducing new registers. However, the number of bank conflicts went down by 26.4% in the process as well, even without the bank aware allocation pass. This is likely due to the baseline needing to frequently access stack, which oftentimes uses fixed registers like `sp`, effectively eliminating one of the four banks as a viable scratch register allocation option. With the added pass however, the number of conflicts drops dramatically by 99.2%.
 
 For stack accesses, we count separate the number of reads and writes, shown in the figure below:
 
-![output(2)](https://hackmd.io/_uploads/SJWhXjkByl.png)
+![stack](figs/stack.png)
 
 With the added registers, spilling has been completely eliminated. The only accesses for the bank-unaware compiler are the ones at the start and end saving and restore the return address register; there's a small amount of inaccuracy towards the end of the emulation due to the emulation terminating when the warp scheduler sees the first warp returning from main, so the stack reads to restore `ra` was not counted (this would add 4 loads).
 
