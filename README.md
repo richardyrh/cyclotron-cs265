@@ -1,9 +1,4 @@
----
-title: 'Redesigning the Vortex GPU ISA: 64-Bit Instruction Words and Conflict-Aware Register Allocation'
-
----
-
-For a nice formatted latex PDF, see `report.pdf` under the root of this repository.
+For a nice formatted latex PDF, see [report.pdf](https://github.com/richardyrh/cyclotron-cs265/blob/cs265/report.pdf) under the root of this repository.
 
 This repository contains the ISA emulator along with the test kernels. Our LLVM modifications can be found [here](https://github.com/richardyrh/llvm).
 
